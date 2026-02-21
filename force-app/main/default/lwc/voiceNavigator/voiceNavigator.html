@@ -1,0 +1,121 @@
+<template>
+    <lightning-card title="Voice Navigator" icon-name="utility:voice">
+        <div class="slds-p-around_medium">
+            <!-- Hidden iframe for speech recognition -->
+            <iframe src={vfPageUrl} class="voice-iframe" lwc:ref="voiceFrame" allow="microphone *"></iframe>
+
+            <!-- Mic Button -->
+            <div class="slds-grid slds-grid_align-center slds-m-bottom_medium">
+                <button class={micButtonClass} onclick={toggleListening} title="Toggle Voice (Option+Space / Ctrl+Space)">
+                    <lightning-icon
+                        icon-name={micIcon}
+                        size="medium"
+                        alternative-text="Microphone">
+                    </lightning-icon>
+                </button>
+            </div>
+            <div class="slds-text-align_center slds-m-bottom_small">
+                <p class="slds-text-body_small slds-text-color_weak shortcut-hint">{shortcutHint}</p>
+            </div>
+
+            <!-- Status -->
+            <div class="slds-text-align_center slds-m-bottom_small">
+                <span class={statusBadgeClass}>{status}</span>
+            </div>
+
+            <!-- Transcript -->
+            <template if:true={lastTranscript}>
+                <div class="slds-box slds-theme_shade slds-m-bottom_small">
+                    <p class="slds-text-body_small slds-text-color_weak">Last Command:</p>
+                    <p class="slds-text-body_regular">{lastTranscript}</p>
+                </div>
+            </template>
+
+            <!-- Action Taken -->
+            <template if:true={actionMessage}>
+                <div class="slds-box slds-theme_success slds-m-bottom_small">
+                    <p class="slds-text-body_small">{actionMessage}</p>
+                </div>
+            </template>
+
+            <!-- Search Loading -->
+            <template if:true={isSearching}>
+                <div class="slds-m-bottom_small slds-text-align_center">
+                    <lightning-spinner alternative-text="Searching" size="small"></lightning-spinner>
+                    <p class="slds-text-body_small slds-m-top_x-small">Searching...</p>
+                </div>
+            </template>
+
+            <!-- Search Results -->
+            <template if:true={hasSearchResults}>
+                <div class="slds-box slds-m-bottom_small search-results-container">
+                    <p class="slds-text-title_caps slds-m-bottom_x-small">Search Results</p>
+                    <ul class="slds-has-dividers_bottom-space">
+                        <template for:each={searchResults} for:item="result">
+                            <li key={result.id} class="slds-item search-result-item"
+                                data-record-id={result.id} onclick={handleSearchResultClick}>
+                                <div class="slds-grid slds-grid_vertical-align-center">
+                                    <div class="slds-col">
+                                        <p class="slds-text-body_regular search-result-name">
+                                            {result.name}
+                                        </p>
+                                        <p class="slds-text-body_small slds-text-color_weak">
+                                            {result.objectType}
+                                        </p>
+                                    </div>
+                                    <div class="slds-col_bump-left">
+                                        <lightning-icon icon-name="utility:chevronright" size="x-small"></lightning-icon>
+                                    </div>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+            </template>
+
+            <!-- Error -->
+            <template if:true={errorMessage}>
+                <div class="slds-box slds-theme_error slds-m-bottom_small">
+                    <p class="slds-text-body_small">{errorMessage}</p>
+                </div>
+            </template>
+
+            <!-- Help Section -->
+            <div class="slds-m-top_medium">
+                <lightning-accordion allow-multiple-sections-open>
+                    <lightning-accordion-section name="help" label="Voice Commands Help">
+                        <div class="slds-text-body_small">
+                            <p class="slds-m-bottom_xx-small"><strong>Navigation:</strong></p>
+                            <p class="slds-m-bottom_xx-small">"Go to accounts" / "Open contacts" / "Navigate to opportunities"</p>
+                            <p class="slds-m-bottom_xx-small">"Jump to leads" / "Visit cases" / "Head to campaigns"</p>
+
+                            <p class="slds-m-top_small slds-m-bottom_xx-small"><strong>Create Record:</strong></p>
+                            <p class="slds-m-bottom_xx-small">"Create new account" / "Create new account record"</p>
+                            <p class="slds-m-bottom_xx-small">"New contact" / "Add a lead" / "Make new opportunity record"</p>
+
+                            <p class="slds-m-top_small slds-m-bottom_xx-small"><strong>Search Records:</strong></p>
+                            <p class="slds-m-bottom_xx-small">"Find account Acme" / "Search contact John" / "Look up opportunity"</p>
+                            <p class="slds-m-bottom_xx-small">"Locate lead Smith" / "Pull up account Global"</p>
+
+                            <p class="slds-m-top_small slds-m-bottom_xx-small"><strong>Object Manager Pages:</strong></p>
+                            <p class="slds-m-bottom_xx-small">"Show account page layouts" / "Contact validation rules"</p>
+                            <p class="slds-m-bottom_xx-small">"Opportunity triggers" / "Lead record types"</p>
+                            <p class="slds-m-bottom_xx-small">"Account compact layouts" / "Case field sets"</p>
+                            <p class="slds-m-bottom_xx-small">"Create field on account" / "Show account fields"</p>
+
+                            <p class="slds-m-top_small slds-m-bottom_xx-small"><strong>Setup Pages:</strong></p>
+                            <p class="slds-m-bottom_xx-small">"Navigate to users" / "Go to sharing settings"</p>
+                            <p class="slds-m-bottom_xx-small">"Open profiles" / "Jump to permission sets" / "Head to roles"</p>
+                            <p class="slds-m-bottom_xx-small">"Visit flows" / "Check apex classes" / "View lightning components"</p>
+                            <p class="slds-m-bottom_xx-small">"Pull up debug logs" / "Access custom metadata"</p>
+                            <p class="slds-m-bottom_xx-small">"Deployment status" / "Installed packages" / "App manager"</p>
+
+                            <p class="slds-m-top_small slds-m-bottom_xx-small"><strong>Reports &amp; Dashboards:</strong></p>
+                            <p class="slds-m-bottom_xx-small">"Open reports" / "Go to dashboards"</p>
+                        </div>
+                    </lightning-accordion-section>
+                </lightning-accordion>
+            </div>
+        </div>
+    </lightning-card>
+</template>
