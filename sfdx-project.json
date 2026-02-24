@@ -1,12 +1,21 @@
 {
-    "packageDirectories": [
-        {
-            "path": "force-app",
-            "default": true
-        }
-    ],
-    "name": "voice-navigator",
-    "namespace": "",
-    "sfdcLoginUrl": "https://login.salesforce.com",
-    "sourceApiVersion": "59.0"
+  "packageDirectories": [
+    {
+      "versionName": "ver 0.1",
+      "versionNumber": "0.1.0.NEXT",
+      "path": "force-app",
+      "default": true,
+      "package": "Voice Navigator",
+      "versionDescription": "Voice-controlled navigation for Salesforce Lightning. Navigate setup pages, objects, and records using voice commands."
+    }
+  ],
+  "name": "voice-navigator",
+  "namespace": "",
+  "sfdcLoginUrl": "https://login.salesforce.com",
+  "sourceApiVersion": "59.0",
+  "packageAliases": {
+    "Voice Navigator": "0HoJ1000000blP2KAI",
+    "Voice Navigator@0.1.0-1": "04tJ1000000t3WMIAY",
+    "Voice Navigator@0.1.0-2": "04tJ1000000t3WRIAY"
+  }
 }

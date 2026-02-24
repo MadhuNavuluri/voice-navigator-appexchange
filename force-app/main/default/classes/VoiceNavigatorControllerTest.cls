@@ -109,4 +109,61 @@ private class VoiceNavigatorControllerTest {
 
         System.assertNotEquals(null, results, 'Should return a list even with special chars');
     }
+
+    @isTest
+    static void testSearchRecordsSanitizationAllSpecialChars() {
+        // After removing all special chars, the term becomes empty -> should return no results
+        Test.startTest();
+        List<Map<String, String>> results = VoiceNavigatorController.searchRecords('Account', '*?&|');
+        Test.stopTest();
+
+        System.assertEquals(0, results.size(), 'Fully sanitized term should return no results');
+    }
+
+    @isTest
+    static void testSearchRecordsReportDashboardBypass() {
+        // __report__ and __dashboard__ should fall through to general cross-object search
+        Account testAcc = new Account(Name = 'Bypass Test');
+        insert testAcc;
+
+        Test.startTest();
+        Test.setFixedSearchResults(new List<Id>{ testAcc.Id });
+        List<Map<String, String>> reportResults = VoiceNavigatorController.searchRecords('__report__', 'Bypass');
+        List<Map<String, String>> dashResults = VoiceNavigatorController.searchRecords('__dashboard__', 'Bypass');
+        Test.stopTest();
+
+        System.assertNotEquals(null, reportResults, 'Report bypass should return a list');
+        System.assertNotEquals(null, dashResults, 'Dashboard bypass should return a list');
+    }
+
+    @isTest
+    static void testSearchRecordsGeneralWithCase() {
+        // Cover the CaseNumber display name fallback path
+        Case testCase = new Case(Subject = 'Voice Nav Test Case');
+        insert testCase;
+
+        Test.startTest();
+        Test.setFixedSearchResults(new List<Id>{ testCase.Id });
+        List<Map<String, String>> results = VoiceNavigatorController.searchRecords(null, 'Voice');
+        Test.stopTest();
+
+        System.assertNotEquals(null, results, 'Should return results');
+        if (results.size() > 0) {
+            System.assert(String.isNotBlank(results[0].get('name')), 'Should have a display name');
+        }
+    }
+
+    @isTest
+    static void testSearchRecordsBlankObjectApiName() {
+        // Empty string objectApiName should use general search
+        Account testAcc = new Account(Name = 'Blank Test');
+        insert testAcc;
+
+        Test.startTest();
+        Test.setFixedSearchResults(new List<Id>{ testAcc.Id });
+        List<Map<String, String>> results = VoiceNavigatorController.searchRecords('', 'Blank');
+        Test.stopTest();
+
+        System.assertNotEquals(null, results, 'Empty objectApiName should use general search');
+    }
 }
