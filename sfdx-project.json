@@ -1,8 +1,8 @@
 {
   "packageDirectories": [
     {
-      "versionName": "ver 0.1",
-      "versionNumber": "0.1.0.NEXT",
+      "versionName": "ver 1.1 - New Tab Navigation",
+      "versionNumber": "1.1.0.NEXT",
       "path": "force-app",
       "default": true,
       "package": "Voice Navigator",
@@ -16,6 +16,8 @@
   "packageAliases": {
     "Voice Navigator": "0HoJ1000000blP2KAI",
     "Voice Navigator@0.1.0-1": "04tJ1000000t3WMIAY",
-    "Voice Navigator@0.1.0-2": "04tJ1000000t3WRIAY"
+    "Voice Navigator@0.1.0-2": "04tJ1000000t3WRIAY",
+    "Voice Navigator@1.0.0-1": "04tJ1000000t3WWIAY",
+    "Voice Navigator@1.1.0-1": "04tJ1000000t3WbIAI"
   }
 }

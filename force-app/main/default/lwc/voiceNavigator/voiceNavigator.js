@@ -2,6 +2,7 @@ import { LightningElement, track, wire } from 'lwc';
 import { NavigationMixin } from 'lightning/navigation';
 import getObjectApiNames from '@salesforce/apex/VoiceNavigatorController.getObjectApiNames';
 import searchRecords from '@salesforce/apex/VoiceNavigatorController.searchRecords';
+import VOICE_RECOGNITION_SR from '@salesforce/resourceUrl/VoiceRecognitionSR';
 
 // Standard object mapping (spoken name -> API name)
 const STANDARD_OBJECTS = {
@@ -280,10 +281,9 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
     speechSupported = true; // Assume supported until VF page says otherwise
     _messageHandler;
 
-    // Build the VF page URL dynamically
-    get vfPageUrl() {
-        // Use relative URL to the VF page
-        return '/apex/VoiceRecognitionPage';
+    // Use static resource for speech recognition (avoids CSP/clickjack iframe issues)
+    get speechEngineUrl() {
+        return VOICE_RECOGNITION_SR;
     }
 
     // Wire custom objects from Apex
@@ -782,12 +782,14 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
     handleSearchResultClick(event) {
         const recordId = event.currentTarget.dataset.recordId;
         if (recordId) {
-            this[NavigationMixin.Navigate]({
+            this[NavigationMixin.GenerateUrl]({
                 type: 'standard__recordPage',
                 attributes: {
                     recordId: recordId,
                     actionName: 'view'
                 }
+            }).then(url => {
+                window.open(url, '_blank');
             });
             this.searchResults = [];
             this.speakFeedback('Opening record.');
@@ -808,24 +810,21 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         this.actionMessage = `Navigating to create new field on ${objectApiName}...`;
         this.status = 'Navigating';
         this.speakFeedback(`Creating new field on ${objectApiName}.`);
-        this[NavigationMixin.Navigate]({
-            type: 'standard__webPage',
-            attributes: {
-                url: url
-            }
-        });
+        window.open(url, '_blank');
     }
 
     navigateToNewRecord(objectApiName) {
         this.actionMessage = `Creating new ${objectApiName} record...`;
         this.status = 'Navigating';
         this.speakFeedback(`Creating new ${objectApiName} record.`);
-        this[NavigationMixin.Navigate]({
+        this[NavigationMixin.GenerateUrl]({
             type: 'standard__objectPage',
             attributes: {
                 objectApiName: objectApiName,
                 actionName: 'new'
             }
+        }).then(url => {
+            window.open(url, '_blank');
         });
     }
 
@@ -833,12 +832,14 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         this.actionMessage = `Opening ${objectApiName}...`;
         this.status = 'Navigating';
         this.speakFeedback(`Opening ${objectApiName}.`);
-        this[NavigationMixin.Navigate]({
+        this[NavigationMixin.GenerateUrl]({
             type: 'standard__objectPage',
             attributes: {
                 objectApiName: objectApiName,
                 actionName: 'home'
             }
+        }).then(url => {
+            window.open(url, '_blank');
         });
     }
 
@@ -846,12 +847,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         this.actionMessage = message;
         this.status = 'Navigating';
         this.speakFeedback(message);
-        this[NavigationMixin.Navigate]({
-            type: 'standard__webPage',
-            attributes: {
-                url: url
-            }
-        });
+        window.open(url, '_blank');
     }
 
     disconnectedCallback() {

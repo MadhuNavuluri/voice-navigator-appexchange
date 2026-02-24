@@ -14,4 +14,8 @@
         <members>VoiceRecognitionPage</members>
         <name>ApexPage</name>
     </types>
+    <types>
+        <members>VoiceRecognitionSR</members>
+        <name>StaticResource</name>
+    </types>
 </Package>

@@ -1,8 +1,8 @@
 <template>
     <lightning-card title="Voice Navigator" icon-name="utility:voice">
         <div class="slds-p-around_medium">
-            <!-- Hidden iframe for speech recognition -->
-            <iframe src={vfPageUrl} class="voice-iframe" lwc:ref="voiceFrame" allow="microphone *"></iframe>
+            <!-- Hidden iframe for speech recognition (static resource - no CSP issues) -->
+            <iframe src={speechEngineUrl} class="voice-iframe" lwc:ref="voiceFrame" allow="microphone *"></iframe>
 
             <!-- Mic Button -->
             <div class="slds-grid slds-grid_align-center slds-m-bottom_medium">

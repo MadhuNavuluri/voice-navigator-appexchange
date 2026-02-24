@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Recognition Engine</title>
+    <style>
+        body { margin: 0; padding: 0; background: transparent; }
+    </style>
+</head>
+<body>
+<script>
+    var recognition = null;
+    var speechSupported = false;
+
+    try {
+        var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+            recognition.maxAlternatives = 3;
+            speechSupported = true;
+        }
+    } catch (e) {
+        speechSupported = false;
+    }
+
+    // Notify parent about speech support status
+    window.parent.postMessage({
+        type: 'voiceSpeechSupport',
+        supported: speechSupported
+    }, '*');
+
+    if (recognition) {
+        recognition.onstart = function() {
+            window.parent.postMessage({ type: 'voiceStatus', status: 'listening' }, '*');
+        };
+
+        recognition.onresult = function(event) {
+            var transcript = event.results[0][0].transcript;
+            var confidence = event.results[0][0].confidence;
+            window.parent.postMessage({
+                type: 'voiceResult',
+                transcript: transcript,
+                confidence: confidence
+            }, '*');
+        };
+
+        recognition.onerror = function(event) {
+            window.parent.postMessage({
+                type: 'voiceError',
+                error: event.error
+            }, '*');
+        };
+
+        recognition.onend = function() {
+            window.parent.postMessage({ type: 'voiceStatus', status: 'ended' }, '*');
+        };
+    }
+
+    // Listen for commands from LWC
+    window.addEventListener('message', function(event) {
+        if (event.data && event.data.action === 'start' && recognition) {
+            // Cancel any ongoing speech feedback before listening
+            if (window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+            }
+            try {
+                recognition.start();
+            } catch (e) {
+                recognition.stop();
+                setTimeout(function() {
+                    recognition.start();
+                }, 200);
+            }
+        }
+        if (event.data && event.data.action === 'stop' && recognition) {
+            try {
+                recognition.stop();
+            } catch (e) {
+                // ignore
+            }
+        }
+        // Speech synthesis handler
+        if (event.data && event.data.action === 'speak') {
+            try {
+                if (window.speechSynthesis) {
+                    window.speechSynthesis.cancel();
+                    var utterance = new SpeechSynthesisUtterance(event.data.text);
+                    utterance.lang = 'en-US';
+                    utterance.rate = 1.0;
+                    utterance.pitch = 1.0;
+                    utterance.volume = 0.8;
+                    window.speechSynthesis.speak(utterance);
+                }
+            } catch (e) {
+                // Speech synthesis not available, fail silently
+            }
+        }
+    });
+</script>
+</body>
+</html>
