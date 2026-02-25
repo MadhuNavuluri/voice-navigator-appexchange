@@ -996,56 +996,77 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
     // Object resolution
 
     resolveObject(spoken) {
-        const normalized = spoken.toLowerCase().replace(/\s+/g, ' ').trim();
+        // Strip noise words: "object", "objects", "record", "records", "page", "tab", "list"
+        const cleaned = spoken.toLowerCase()
+            .replace(/\s+/g, ' ')
+            .trim()
+            .replace(/\b(?:objects?|records?|pages?|tabs?|list)\b/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
 
-        // 1. Exact match in standard objects
-        if (STANDARD_OBJECTS[normalized]) {
-            return STANDARD_OBJECTS[normalized];
+        if (!cleaned) return null;
+
+        // Try resolution with both original normalized and cleaned forms
+        const candidates = [cleaned];
+        const originalNormalized = spoken.toLowerCase().replace(/\s+/g, ' ').trim();
+        if (originalNormalized !== cleaned) {
+            candidates.push(originalNormalized);
         }
 
-        // 2. Exact match in custom objects
-        if (this.customObjects[normalized]) {
-            return this.customObjects[normalized];
-        }
-
-        // 3. Try stripping trailing 's' for plurals
-        const singular = normalized.replace(/s$/, '');
-        if (STANDARD_OBJECTS[singular]) {
-            return STANDARD_OBJECTS[singular];
-        }
-        if (this.customObjects[singular]) {
-            return this.customObjects[singular];
-        }
-
-        // 4. Fuzzy match
-        const fuzzyThreshold = normalized.length <= 4 ? 1 :
-                               normalized.length <= 7 ? 2 : 3;
-
-        const standardMatch = findFuzzyMatch(normalized, STANDARD_OBJECTS, fuzzyThreshold);
-        if (standardMatch) {
-            return standardMatch.apiName;
-        }
-
-        const customMatch = findFuzzyMatch(normalized, this.customObjects, fuzzyThreshold);
-        if (customMatch) {
-            return customMatch.apiName;
-        }
-
-        // 5. Fuzzy match with singular form
-        if (singular !== normalized) {
-            const singularStdMatch = findFuzzyMatch(singular, STANDARD_OBJECTS, fuzzyThreshold);
-            if (singularStdMatch) {
-                return singularStdMatch.apiName;
+        for (const normalized of candidates) {
+            // 1. Exact match in standard objects
+            if (STANDARD_OBJECTS[normalized]) {
+                return STANDARD_OBJECTS[normalized];
             }
-            const singularCustMatch = findFuzzyMatch(singular, this.customObjects, fuzzyThreshold);
-            if (singularCustMatch) {
-                return singularCustMatch.apiName;
+
+            // 2. Exact match in custom objects
+            if (this.customObjects[normalized]) {
+                return this.customObjects[normalized];
+            }
+
+            // 3. Try stripping trailing 's' for plurals
+            const singular = normalized.endsWith('ies')
+                ? normalized.slice(0, -3) + 'y'
+                : normalized.replace(/s$/, '');
+            if (singular !== normalized) {
+                if (STANDARD_OBJECTS[singular]) {
+                    return STANDARD_OBJECTS[singular];
+                }
+                if (this.customObjects[singular]) {
+                    return this.customObjects[singular];
+                }
+            }
+
+            // 4. Fuzzy match
+            const fuzzyThreshold = normalized.length <= 4 ? 1 :
+                                   normalized.length <= 7 ? 2 : 3;
+
+            const standardMatch = findFuzzyMatch(normalized, STANDARD_OBJECTS, fuzzyThreshold);
+            if (standardMatch) {
+                return standardMatch.apiName;
+            }
+
+            const customMatch = findFuzzyMatch(normalized, this.customObjects, fuzzyThreshold);
+            if (customMatch) {
+                return customMatch.apiName;
+            }
+
+            // 5. Fuzzy match with singular form
+            if (singular !== normalized) {
+                const singularStdMatch = findFuzzyMatch(singular, STANDARD_OBJECTS, fuzzyThreshold);
+                if (singularStdMatch) {
+                    return singularStdMatch.apiName;
+                }
+                const singularCustMatch = findFuzzyMatch(singular, this.customObjects, fuzzyThreshold);
+                if (singularCustMatch) {
+                    return singularCustMatch.apiName;
+                }
             }
         }
 
-        // 6. Last resort: construct custom object API name
-        const customApiName = normalized.replace(/\s/g, '_') + '__c';
-        if (normalized.length > 1 && !normalized.includes('field') && !normalized.includes('setup')) {
+        // 6. Last resort: construct custom object API name from cleaned form
+        if (cleaned.length > 1 && !cleaned.includes('field') && !cleaned.includes('setup')) {
+            const customApiName = cleaned.replace(/\s/g, '_') + '__c';
             return customApiName.charAt(0).toUpperCase() + customApiName.slice(1);
         }
 

@@ -66,7 +66,7 @@ public with sharing class VoiceNavigatorController {
                 }
             }
         } catch (Exception e) {
-            // Field describe failed — return empty list
+            // Error getting fields - return empty list
         }
 
         return fieldList;
@@ -149,7 +149,7 @@ public with sharing class VoiceNavigatorController {
                 }
             }
         } catch (Exception e) {
-            // Search failed — return empty results
+            // Search error - return empty results
         }
 
         return results;
