@@ -1,27 +1,27 @@
 <template>
     <lightning-card title="Voice Navigator" icon-name="utility:voice">
         <div class="slds-p-around_medium">
+            <!-- Hidden iframe for speech recognition (static resource - no CSP issues) -->
             <iframe src={speechEngineUrl} class="voice-iframe" lwc:ref="voiceFrame" allow="microphone *"></iframe>
 
+            <!-- Mic Button -->
             <div class="slds-grid slds-grid_align-center slds-m-bottom_small">
-                <button class={micButtonClass}
-                        onclick={toggleListening}
-                        aria-label="Toggle voice recognition"
-                        title="Click to speak | ⌥+Space | Ctrl+Space">
+                <button class={micButtonClass} onclick={toggleListening} title="Click to speak | ⌥+Space (Mac) • Ctrl+Space (Win)" aria-label="Toggle voice recognition">
                     <template if:false={isListening}>
-                        <svg class="mic-svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <svg class="mic-svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                             <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
                         </svg>
                     </template>
                     <template if:true={isListening}>
-                        <svg class="mic-svg mic-svg-active" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <svg class="mic-svg mic-svg-active" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <rect x="6" y="4" width="12" height="16" rx="2"/>
                         </svg>
                     </template>
                 </button>
             </div>
 
+            <!-- Sound Wave Animation (visible when listening) -->
             <template if:true={isListening}>
                 <div class="sound-wave-container fade-in">
                     <div class="sound-bar"></div>
@@ -32,13 +32,16 @@
                 </div>
             </template>
 
+            <!-- Hint Text -->
             <div class="slds-text-align_center slds-m-bottom_small">
                 <p class="shortcut-hint">{shortcutHint}</p>
+                <!-- Welcome hint for first-time users -->
                 <template if:false={lastTranscript}>
                     <p class="welcome-hint">Try saying "Go to accounts" or "Find Acme"</p>
                 </template>
             </div>
 
+            <!-- Status Badge with Icons -->
             <div class="slds-text-align_center slds-m-bottom_small" role="status" aria-live="polite">
                 <span class={statusBadgeClass}>
                     <template if:true={showStatusDot}>
@@ -51,12 +54,13 @@
                 </span>
             </div>
 
+            <!-- Transcript with Confidence Indicator -->
             <template if:true={lastTranscript}>
                 <div class="slds-box slds-theme_shade slds-m-bottom_small fade-in">
                     <p class="slds-text-body_small slds-text-color_weak">Last Command:</p>
                     <p class="slds-text-body_regular">{transcriptText}</p>
                     <template if:true={confidenceValue}>
-                        <div class="confidence-container" aria-label="Speech confidence level">
+                        <div class="confidence-container">
                             <div class="confidence-bar-bg">
                                 <div class={confidenceBarClass} style={confidenceBarWidth}></div>
                             </div>
@@ -66,12 +70,14 @@
                 </div>
             </template>
 
+            <!-- Action Taken -->
             <template if:true={actionMessage}>
                 <div class="slds-box slds-theme_success slds-m-bottom_small fade-in">
                     <p class="slds-text-body_small">{actionMessage}</p>
                 </div>
             </template>
 
+            <!-- Search Loading -->
             <template if:true={isSearching}>
                 <div class="slds-m-bottom_small slds-text-align_center fade-in">
                     <lightning-spinner alternative-text="Searching" size="small"></lightning-spinner>
@@ -79,6 +85,7 @@
                 </div>
             </template>
 
+            <!-- Search Results -->
             <template if:true={hasSearchResults}>
                 <div class="slds-box slds-m-bottom_small search-results-container fade-in">
                     <p class="slds-text-title_caps slds-m-bottom_x-small">Search Results</p>
@@ -105,36 +112,55 @@
                 </div>
             </template>
 
+            <!-- Error -->
             <template if:true={errorMessage}>
                 <div class="slds-box slds-theme_error slds-m-bottom_small fade-in">
                     <p class="slds-text-body_small">{errorMessage}</p>
                 </div>
             </template>
 
+            <!-- Help Section -->
             <div class="slds-m-top_medium">
-                <lightning-accordion allow-multiple-sections-open>
+                <lightning-accordion allow-multiple-sections-open active-section-name={helpSectionsOpen}>
                     <lightning-accordion-section name="help" label="Voice Commands Help">
                         <div class="slds-text-body_small">
                             <p class="slds-m-bottom_xx-small"><strong>Navigation:</strong></p>
                             <p class="slds-m-bottom_xx-small">"Go to accounts" / "Open contacts" / "Navigate to opportunities"</p>
-                            <p class="slds-m-bottom_xx-small">"Jump to leads" / "Visit cases" / "Head to campaigns"</p>
+                            <p class="slds-m-bottom_xx-small">"Show me leads" / "Where are cases" / "Bring up campaigns"</p>
+                            <p class="slds-m-bottom_xx-small">"Point me to assets" / "Route me to work orders"</p>
 
                             <p class="slds-m-top_small slds-m-bottom_xx-small"><strong>Create Record:</strong></p>
                             <p class="slds-m-bottom_xx-small">"Create new account" / "New contact" / "Add a lead"</p>
+                            <p class="slds-m-bottom_xx-small">"Create new report" / "Create new dashboard"</p>
 
                             <p class="slds-m-top_small slds-m-bottom_xx-small"><strong>Search Records:</strong></p>
-                            <p class="slds-m-bottom_xx-small">"Find account Acme" / "Search contact John" / "Look up opportunity"</p>
+                            <p class="slds-m-bottom_xx-small">"Find Acme" / "Search contact John" / "Search for opportunity"</p>
+                            <p class="slds-m-bottom_xx-small">"Who is John Smith" / "Look up lead Global Media"</p>
 
                             <p class="slds-m-top_small slds-m-bottom_xx-small"><strong>Object Manager Pages:</strong></p>
                             <p class="slds-m-bottom_xx-small">"Show account page layouts" / "Contact validation rules"</p>
+                            <p class="slds-m-bottom_xx-small">"Opportunity triggers" / "Lead record types"</p>
+                            <p class="slds-m-bottom_xx-small">"Account feed tracking" / "Case list views"</p>
                             <p class="slds-m-bottom_xx-small">"Create field on account" / "Show account fields"</p>
 
                             <p class="slds-m-top_small slds-m-bottom_xx-small"><strong>Setup Pages:</strong></p>
-                            <p class="slds-m-bottom_xx-small">"Open users" / "Go to profiles" / "Jump to permission sets"</p>
-                            <p class="slds-m-bottom_xx-small">"Visit flows" / "Apex classes" / "Debug logs"</p>
+                            <p class="slds-m-bottom_xx-small">"Go to users" / "Open profiles" / "Visit sharing settings"</p>
+                            <p class="slds-m-bottom_xx-small">"Navigate to flows" / "Case settings" / "Lead assignment rules"</p>
+                            <p class="slds-m-bottom_xx-small">"Einstein settings" / "Mobile navigation" / "Dev hub"</p>
+                            <p class="slds-m-bottom_xx-small">"Health check" / "Release updates" / "Deployment status"</p>
+
+                            <p class="slds-m-top_small slds-m-bottom_xx-small"><strong>Special Pages:</strong></p>
+                            <p class="slds-m-bottom_xx-small">"Home" / "Recycle bin" / "My settings" / "Favorites"</p>
+                            <p class="slds-m-bottom_xx-small">"Developer console" / "AppExchange" / "Trailhead"</p>
+
+                            <p class="slds-m-top_small slds-m-bottom_xx-small"><strong>Browser Actions:</strong></p>
+                            <p class="slds-m-bottom_xx-small">"Go back" / "Refresh"</p>
 
                             <p class="slds-m-top_small slds-m-bottom_xx-small"><strong>Reports &amp; Dashboards:</strong></p>
                             <p class="slds-m-bottom_xx-small">"Open reports" / "Go to dashboards"</p>
+
+                            <p class="slds-m-top_small slds-m-bottom_xx-small"><strong>Help:</strong></p>
+                            <p class="slds-m-bottom_xx-small">"Help" / "What can you do" / "List commands"</p>
                         </div>
                     </lightning-accordion-section>
                 </lightning-accordion>

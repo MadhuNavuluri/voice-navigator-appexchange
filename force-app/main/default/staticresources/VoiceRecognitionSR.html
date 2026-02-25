@@ -35,11 +35,11 @@
     }, '*');
 
     if (recognition) {
-        recognition.onstart = function () {
+        recognition.onstart = function() {
             window.parent.postMessage({ type: 'voiceStatus', status: 'listening' }, '*');
         };
 
-        recognition.onresult = function (event) {
+        recognition.onresult = function(event) {
             const transcript = event.results[0][0].transcript;
             const confidence = event.results[0][0].confidence;
             window.parent.postMessage({
@@ -49,26 +49,21 @@
             }, '*');
         };
 
-        recognition.onerror = function (event) {
+        recognition.onerror = function(event) {
             window.parent.postMessage({
                 type: 'voiceError',
                 error: event.error
             }, '*');
         };
 
-        recognition.onend = function () {
+        recognition.onend = function() {
             window.parent.postMessage({ type: 'voiceStatus', status: 'ended' }, '*');
         };
     }
 
-    window.addEventListener('message', function (event) {
-        if (event.origin !== window.location.origin) {
-            return;
-        }
-
-        if (!event.data || !event.data.action) {
-            return;
-        }
+    window.addEventListener('message', function(event) {
+        if (event.origin !== window.location.origin) return;
+        if (!event.data || !event.data.action) return;
 
         if (event.data.action === 'start' && recognition) {
             if (window.speechSynthesis) {
@@ -78,32 +73,28 @@
                 recognition.start();
             } catch (e) {
                 recognition.stop();
-                setTimeout(function () {
+                setTimeout(function() {
                     recognition.start();
                 }, 200);
             }
         }
-
         if (event.data.action === 'stop' && recognition) {
             try {
                 recognition.stop();
-            } catch (e) {
-                // Recognition was not running; safe to ignore
-            }
+            } catch (e) { /* already stopped */ }
         }
-
-        if (event.data.action === 'speak' && window.speechSynthesis) {
+        if (event.data.action === 'speak') {
             try {
-                window.speechSynthesis.cancel();
-                const utterance = new SpeechSynthesisUtterance(event.data.text);
-                utterance.lang = 'en-US';
-                utterance.rate = 1.0;
-                utterance.pitch = 1.0;
-                utterance.volume = 0.8;
-                window.speechSynthesis.speak(utterance);
-            } catch (e) {
-                // Synthesis unavailable in this browser
-            }
+                if (window.speechSynthesis) {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(event.data.text);
+                    utterance.lang = 'en-US';
+                    utterance.rate = 1.0;
+                    utterance.pitch = 1.0;
+                    utterance.volume = 0.8;
+                    window.speechSynthesis.speak(utterance);
+                }
+            } catch (e) { /* synthesis unavailable */ }
         }
     });
 </script>

@@ -1,19 +1,10 @@
-/**
- * Voice Navigator — voice-controlled navigation for Salesforce Lightning.
- * Lets users navigate Setup pages, objects, records, and Object Manager
- * using natural spoken commands. Speech recognition runs in a sandboxed
- * iframe loaded from a static resource to work within Locker Service.
- *
- * @author  Madhu Navuluri
- * @version 1.2.0
- */
 import { LightningElement, wire } from 'lwc';
 import { NavigationMixin } from 'lightning/navigation';
 import getObjectApiNames from '@salesforce/apex/VoiceNavigatorController.getObjectApiNames';
 import searchRecords from '@salesforce/apex/VoiceNavigatorController.searchRecords';
 import VOICE_RECOGNITION_SR from '@salesforce/resourceUrl/VoiceRecognitionSR';
 
-// Spoken name to API name mapping for standard objects
+// Standard object mapping (spoken name -> API name)
 const STANDARD_OBJECTS = {
     'account': 'Account',
     'accounts': 'Account',
@@ -48,13 +39,72 @@ const STANDARD_OBJECTS = {
     'report': '__report__',
     'reports': '__report__',
     'dashboard': '__dashboard__',
-    'dashboards': '__dashboard__'
+    'dashboards': '__dashboard__',
+    // Field Service
+    'asset': 'Asset',
+    'assets': 'Asset',
+    'work order': 'WorkOrder',
+    'work orders': 'WorkOrder',
+    'service contract': 'ServiceContract',
+    'service contracts': 'ServiceContract',
+    'entitlement': 'Entitlement',
+    'entitlements': 'Entitlement',
+    'service appointment': 'ServiceAppointment',
+    'service appointments': 'ServiceAppointment',
+    'service resource': 'ServiceResource',
+    'service resources': 'ServiceResource',
+    'service territory': 'ServiceTerritory',
+    'service territories': 'ServiceTerritory',
+    // Knowledge
+    'knowledge': 'Knowledge__kav',
+    'knowledge articles': 'Knowledge__kav',
+    'knowledge article': 'Knowledge__kav',
+    // Privacy
+    'individual': 'Individual',
+    'individuals': 'Individual',
+    // Productivity
+    'macro': 'Macro',
+    'macros': 'Macro',
+    'quick text': 'QuickText',
+    'quick texts': 'QuickText',
+    // Email
+    'email message': 'EmailMessage',
+    'email messages': 'EmailMessage',
+    'list email': 'ListEmail',
+    'list emails': 'ListEmail',
+    // Sales child objects
+    'opportunity line item': 'OpportunityLineItem',
+    'opportunity line items': 'OpportunityLineItem',
+    'opportunity products': 'OpportunityLineItem',
+    'opportunity product': 'OpportunityLineItem',
+    'partner': 'Partner',
+    'partners': 'Partner'
 };
 
-/**
- * Computes the Levenshtein edit distance between two strings.
- * Used to tolerate minor speech recognition errors and accents.
- */
+// Unified navigation verb list — shared across all command parsers
+const NAV_VERBS = [
+    'go', 'navigate', 'open', 'show', 'take me', 'bring me', 'jump',
+    'switch', 'head', 'visit', 'pull up', 'check', 'view', 'see',
+    'access', 'get', 'move', 'launch', 'load', 'display',
+    'direct me', 'send me', 'redirect me',
+    'i want', 'i need', 'let me see', 'can you open', 'can you show',
+    'where is', 'where are', 'where can i find',
+    'bring up', 'show me', 'point me to', 'route me to'
+].sort((a, b) => b.length - a.length);
+
+const NAV_VERB_PATTERN = NAV_VERBS.join('|');
+
+// Strips navigation prefix from text (used by trySetupPage, tryObjectSubpage, trySpecialPages)
+const NAV_STRIP_REGEX = new RegExp(
+    '^(?:please\\s+)?(?:' + NAV_VERB_PATTERN + ')\\s+(?:to\\s+|me\\s+)?', 'i'
+);
+
+// Captures everything after navigation prefix (used by tryNavigateObject)
+const NAV_CAPTURE_REGEX = new RegExp(
+    '(?:please\\s+)?(?:' + NAV_VERB_PATTERN + ')\\s+(?:to\\s+|me\\s+)?(.*)', 'i'
+);
+
+// Levenshtein edit distance for fuzzy matching misspoken object names
 function levenshteinDistance(a, b) {
     const m = a.length;
     const n = b.length;
@@ -84,7 +134,7 @@ function levenshteinDistance(a, b) {
     return prevRow[n];
 }
 
-/** Finds the closest key in a flat {key: apiName} map within the allowed distance. */
+// Find closest matching key from candidates within maxDistance
 function findFuzzyMatch(input, candidates, maxDistance) {
     let bestMatch = null;
     let bestDistance = maxDistance + 1;
@@ -100,7 +150,7 @@ function findFuzzyMatch(input, candidates, maxDistance) {
     return bestDistance <= maxDistance ? bestMatch : null;
 }
 
-/** Finds the closest key in a registry where values are {url/path, label} objects. */
+// Fuzzy match for registry objects (where values are {url/path, label} objects)
 function findFuzzyMatchInRegistry(input, registry, maxDistance) {
     let bestMatch = null;
     let bestDistance = maxDistance + 1;
@@ -116,7 +166,7 @@ function findFuzzyMatchInRegistry(input, registry, maxDistance) {
     return bestDistance <= maxDistance ? bestMatch : null;
 }
 
-// Object Manager sub-page registry
+// Object Manager subpage registry (spoken name -> { path, label })
 const OBJECT_SUBPAGES = {
     'fields':                    { path: 'FieldsAndRelationships/view', label: 'Fields & Relationships' },
     'fields and relationships':  { path: 'FieldsAndRelationships/view', label: 'Fields & Relationships' },
@@ -129,10 +179,13 @@ const OBJECT_SUBPAGES = {
     'lightning record pages':    { path: 'LightningPages/view', label: 'Lightning Record Pages' },
     'lightning pages':           { path: 'LightningPages/view', label: 'Lightning Record Pages' },
     'record pages':              { path: 'LightningPages/view', label: 'Lightning Record Pages' },
+    'record page':               { path: 'LightningPages/view', label: 'Lightning Record Pages' },
     'buttons links and actions': { path: 'ButtonsLinksActions/view', label: 'Buttons, Links & Actions' },
     'buttons and links':         { path: 'ButtonsLinksActions/view', label: 'Buttons, Links & Actions' },
     'actions':                   { path: 'ButtonsLinksActions/view', label: 'Buttons, Links & Actions' },
     'quick actions':             { path: 'ButtonsLinksActions/view', label: 'Buttons, Links & Actions' },
+    'buttons':                   { path: 'ButtonsLinksActions/view', label: 'Buttons, Links & Actions' },
+    'links':                     { path: 'ButtonsLinksActions/view', label: 'Buttons, Links & Actions' },
     'compact layouts':           { path: 'CompactLayouts/view', label: 'Compact Layouts' },
     'compact layout':            { path: 'CompactLayouts/view', label: 'Compact Layouts' },
     'record types':              { path: 'RecordTypes/view', label: 'Record Types' },
@@ -140,6 +193,7 @@ const OBJECT_SUBPAGES = {
     'validation rules':          { path: 'ValidationRules/view', label: 'Validation Rules' },
     'validation rule':           { path: 'ValidationRules/view', label: 'Validation Rules' },
     'validations':               { path: 'ValidationRules/view', label: 'Validation Rules' },
+    'validation':                { path: 'ValidationRules/view', label: 'Validation Rules' },
     'triggers':                  { path: 'ApexTriggers/view', label: 'Triggers' },
     'trigger':                   { path: 'ApexTriggers/view', label: 'Triggers' },
     'apex triggers':             { path: 'ApexTriggers/view', label: 'Triggers' },
@@ -155,9 +209,15 @@ const OBJECT_SUBPAGES = {
     'object details':            { path: 'Details/view', label: 'Details' },
     'object manager':            { path: 'Details/view', label: 'Object Manager Details' },
     'new field':                 { path: 'FieldsAndRelationships/new', label: 'New Field' },
+    // New subpages
+    'feed tracking':             { path: 'FeedTracking/view', label: 'Feed Tracking' },
+    'list views':                { path: 'ListView/view', label: 'List Views' },
+    'list view':                 { path: 'ListView/view', label: 'List Views' },
+    'related lookup filters':    { path: 'RelatedLookupFilters/view', label: 'Related Lookup Filters' },
+    'lookup filters':            { path: 'RelatedLookupFilters/view', label: 'Related Lookup Filters' }
 };
 
-// Setup page registry — 120+ pages organized by category
+// Setup pages registry (spoken name -> { url, label })
 const SETUP_PAGES = {
     // Administration
     'users':                     { url: '/lightning/setup/ManageUsers/home', label: 'Users' },
@@ -192,6 +252,18 @@ const SETUP_PAGES = {
     'connected apps':            { url: '/lightning/setup/ConnectedApplication/home', label: 'Connected Apps' },
     'cors':                      { url: '/lightning/setup/CorsWhitelistEntries/home', label: 'CORS' },
     'remote site settings':      { url: '/lightning/setup/SecurityRemoteProxy/home', label: 'Remote Site Settings' },
+    'oauth':                     { url: '/lightning/setup/ConnectedApplication/home', label: 'Connected Apps (OAuth)' },
+    'identity provider':         { url: '/lightning/setup/IdpPage/home', label: 'Identity Provider' },
+    'certificates':              { url: '/lightning/setup/CertificatesAndKeysManagement/home', label: 'Certificate & Key Management' },
+    'certificate management':    { url: '/lightning/setup/CertificatesAndKeysManagement/home', label: 'Certificate & Key Management' },
+    'trusted urls':              { url: '/lightning/setup/SecurityCspTrustedSite/home', label: 'Trusted URLs' },
+    'health check':              { url: '/lightning/setup/HealthCheck/home', label: 'Health Check' },
+    'security health check':     { url: '/lightning/setup/HealthCheck/home', label: 'Health Check' },
+    'login flows':               { url: '/lightning/setup/LoginFlow/home', label: 'Login Flows' },
+    'platform encryption':       { url: '/lightning/setup/PlatformEncryption/home', label: 'Platform Encryption' },
+    'shield':                    { url: '/lightning/setup/PlatformEncryption/home', label: 'Shield Platform Encryption' },
+    'event monitoring':          { url: '/lightning/setup/EventMonitoring/home', label: 'Event Monitoring' },
+    'file upload security':      { url: '/lightning/setup/FileUploadAndDownloadSecurity/home', label: 'File Upload & Download Security' },
 
     // Email
     'email deliverability':      { url: '/lightning/setup/OrgEmailSettings/home', label: 'Email Deliverability' },
@@ -278,10 +350,158 @@ const SETUP_PAGES = {
     'object manager':            { url: '/lightning/setup/ObjectManager/home', label: 'Object Manager' },
     'setup':                     { url: '/lightning/setup/SetupOneHome/home', label: 'Setup Home' },
     'setup home':                { url: '/lightning/setup/SetupOneHome/home', label: 'Setup Home' },
+
+    // Schema / Objects
+    'custom objects':            { url: '/lightning/setup/ObjectManager/home', label: 'Object Manager' },
+    'external objects':          { url: '/lightning/setup/ExternalObjects/home', label: 'External Objects' },
+    'big objects':               { url: '/lightning/setup/BigObjects/home', label: 'Big Objects' },
+    'global picklist value sets': { url: '/lightning/setup/Picklists/home', label: 'Global Picklist Value Sets' },
+    'global picklists':          { url: '/lightning/setup/Picklists/home', label: 'Global Picklist Value Sets' },
+    'picklist value sets':       { url: '/lightning/setup/Picklists/home', label: 'Global Picklist Value Sets' },
+    'state and country picklists': { url: '/lightning/setup/AddressCleanerOverview/home', label: 'State & Country Picklists' },
+
+    // Integration
+    'api':                       { url: '/lightning/setup/WebServices/home', label: 'API' },
+    'api settings':              { url: '/lightning/setup/WebServices/home', label: 'API' },
+    'external data sources':     { url: '/lightning/setup/ExternalDataSource/home', label: 'External Data Sources' },
+    'change data capture':       { url: '/lightning/setup/ChangeDataCapture/home', label: 'Change Data Capture' },
+    'external services':         { url: '/lightning/setup/ExternalServices/home', label: 'External Services' },
+
+    // Analytics
+    'custom report types':       { url: '/lightning/setup/CustomReportTypes/home', label: 'Custom Report Types' },
+    'report types':              { url: '/lightning/setup/CustomReportTypes/home', label: 'Custom Report Types' },
+    'reports and dashboards settings': { url: '/lightning/setup/ReportsDashboardsSettings/home', label: 'Reports & Dashboards Settings' },
+    'crm analytics':             { url: '/lightning/setup/InsightsSetupPage/home', label: 'CRM Analytics' },
+    'analytics':                 { url: '/lightning/setup/InsightsSetupPage/home', label: 'CRM Analytics' },
+
+    // Service Settings
+    'case settings':             { url: '/lightning/setup/CaseSettings/home', label: 'Case Settings' },
+    'support settings':          { url: '/lightning/setup/CaseSettings/home', label: 'Support Settings' },
+    'escalation rules':          { url: '/lightning/setup/CaseEscRules/home', label: 'Escalation Rules' },
+    'assignment rules':          { url: '/lightning/setup/CaseRules/home', label: 'Case Assignment Rules' },
+    'auto-response rules':       { url: '/lightning/setup/CaseAutoResponseRules/home', label: 'Auto-Response Rules' },
+    'auto response rules':       { url: '/lightning/setup/CaseAutoResponseRules/home', label: 'Auto-Response Rules' },
+    'entitlement management':    { url: '/lightning/setup/EntitlementManagement/home', label: 'Entitlement Management' },
+    'omni-channel':              { url: '/lightning/setup/OmniChannel/home', label: 'Omni-Channel' },
+    'omnichannel':               { url: '/lightning/setup/OmniChannel/home', label: 'Omni-Channel' },
+    'knowledge settings':        { url: '/lightning/setup/KnowledgeSettings/home', label: 'Knowledge Settings' },
+    'live agent':                { url: '/lightning/setup/LiveAgentSettings/home', label: 'Live Agent Settings' },
+    'chat settings':             { url: '/lightning/setup/LiveAgentSettings/home', label: 'Chat Settings' },
+    'web to case':               { url: '/lightning/setup/CaseWebToCase/home', label: 'Web-to-Case' },
+    'web-to-case':               { url: '/lightning/setup/CaseWebToCase/home', label: 'Web-to-Case' },
+    'email to case':             { url: '/lightning/setup/EmailToCase/home', label: 'Email-to-Case' },
+    'email-to-case':             { url: '/lightning/setup/EmailToCase/home', label: 'Email-to-Case' },
+
+    // Sales Settings
+    'lead settings':             { url: '/lightning/setup/LeadSettings/home', label: 'Lead Settings' },
+    'lead assignment rules':     { url: '/lightning/setup/LeadRules/home', label: 'Lead Assignment Rules' },
+    'web to lead':               { url: '/lightning/setup/LeadWebToLead/home', label: 'Web-to-Lead' },
+    'web-to-lead':               { url: '/lightning/setup/LeadWebToLead/home', label: 'Web-to-Lead' },
+    'opportunity settings':      { url: '/lightning/setup/OpportunitySettings/home', label: 'Opportunity Settings' },
+    'forecasts settings':        { url: '/lightning/setup/Forecasting3Settings/home', label: 'Forecasts Settings' },
+    'forecast settings':         { url: '/lightning/setup/Forecasting3Settings/home', label: 'Forecasts Settings' },
+    'territory management':      { url: '/lightning/setup/Territory2Settings/home', label: 'Territory Management' },
+    'territories':               { url: '/lightning/setup/Territory2Settings/home', label: 'Territory Management' },
+    'sales processes':           { url: '/lightning/setup/OpportunitySalesProcess/home', label: 'Sales Processes' },
+    'path settings':             { url: '/lightning/setup/PathAssistantSetupHome/home', label: 'Path Settings' },
+    'sales path':                { url: '/lightning/setup/PathAssistantSetupHome/home', label: 'Path Settings' },
+    'big deal alerts':           { url: '/lightning/setup/OpportunityBigDealAlerts/home', label: 'Big Deal Alert' },
+    'products settings':         { url: '/lightning/setup/Product2Settings/home', label: 'Products Settings' },
+    'quotes settings':           { url: '/lightning/setup/QuoteSettings/home', label: 'Quotes Settings' },
+
+    // Marketing
+    'campaign influence':        { url: '/lightning/setup/CampaignInfluence/home', label: 'Campaign Influence' },
+
+    // Communities / Digital Experiences
+    'digital experiences':       { url: '/lightning/setup/SetupNetworks/home', label: 'Digital Experiences' },
+    'communities':               { url: '/lightning/setup/SetupNetworks/home', label: 'Digital Experiences' },
+    'experience cloud':          { url: '/lightning/setup/SetupNetworks/home', label: 'Digital Experiences' },
+
+    // Einstein / AI
+    'einstein':                  { url: '/lightning/setup/EinsteinSearchSettings/home', label: 'Einstein Settings' },
+    'einstein settings':         { url: '/lightning/setup/EinsteinSearchSettings/home', label: 'Einstein Settings' },
+    'einstein activity capture': { url: '/lightning/setup/EinsteinActivityCapture/home', label: 'Einstein Activity Capture' },
+    'einstein bots':             { url: '/lightning/setup/EinsteinBots/home', label: 'Einstein Bots' },
+    'bots':                      { url: '/lightning/setup/EinsteinBots/home', label: 'Einstein Bots' },
+    'prediction builder':        { url: '/lightning/setup/PredictionBuilder/home', label: 'Prediction Builder' },
+
+    // Mobile
+    'salesforce mobile':         { url: '/lightning/setup/SalesforceMobileAppQuickStart/home', label: 'Salesforce Mobile App' },
+    'mobile settings':           { url: '/lightning/setup/SalesforceMobileAppQuickStart/home', label: 'Salesforce Mobile App' },
+    'mobile navigation':         { url: '/lightning/setup/SalesforceMobileNavigation/home', label: 'Mobile Navigation' },
+    'mobile menu':               { url: '/lightning/setup/SalesforceMobileNavigation/home', label: 'Mobile Navigation' },
+    'offline settings':          { url: '/lightning/setup/MobileOfflineSettings/home', label: 'Offline Settings' },
+
+    // Notifications
+    'notification settings':     { url: '/lightning/setup/NotificationSettings/home', label: 'Notification Settings' },
+    'notifications':             { url: '/lightning/setup/NotificationSettings/home', label: 'Notification Settings' },
+    'custom notifications':      { url: '/lightning/setup/CustomNotifications/home', label: 'Custom Notifications' },
+
+    // Internationalization
+    'translation workbench':     { url: '/lightning/setup/Translations/home', label: 'Translation Workbench' },
+    'translations':              { url: '/lightning/setup/Translations/home', label: 'Translation Workbench' },
+    'currency management':       { url: '/lightning/setup/CurrencySetup/home', label: 'Currency Management' },
+    'currencies':                { url: '/lightning/setup/CurrencySetup/home', label: 'Currency Management' },
+    'data classification':       { url: '/lightning/setup/DataClassification/home', label: 'Data Classification' },
+
+    // Monitoring (additional)
+    'lightning usage':           { url: '/lightning/setup/LightningUsageSetup/home', label: 'Lightning Usage' },
+    'release updates':           { url: '/lightning/setup/ReleaseUpdates/home', label: 'Release Updates' },
+    'critical updates':          { url: '/lightning/setup/ReleaseUpdates/home', label: 'Release Updates' },
+    'salesforce optimizer':      { url: '/lightning/setup/SalesforceOptimizer/home', label: 'Salesforce Optimizer' },
+    'optimizer':                 { url: '/lightning/setup/SalesforceOptimizer/home', label: 'Salesforce Optimizer' },
+    'bulk data load jobs':       { url: '/lightning/setup/AsyncApiJobStatus/home', label: 'Bulk Data Load Jobs' },
+    'bulk api':                  { url: '/lightning/setup/AsyncApiJobStatus/home', label: 'Bulk Data Load Jobs' },
+
+    // Dev Hub
+    'dev hub':                   { url: '/lightning/setup/DevHub/home', label: 'Dev Hub' },
+    'developer hub':             { url: '/lightning/setup/DevHub/home', label: 'Dev Hub' },
+    'scratch orgs':              { url: '/lightning/setup/ScratchOrgInfo/home', label: 'Scratch Org Info' },
+    'scratch org info':          { url: '/lightning/setup/ScratchOrgInfo/home', label: 'Scratch Org Info' },
+    'second generation packages': { url: '/lightning/setup/Package2/home', label: 'Second-Generation Packages' },
+
+    // Misc Setup
+    'quick text settings':       { url: '/lightning/setup/QuickTextSettings/home', label: 'Quick Text Settings' },
+    'macro settings':            { url: '/lightning/setup/MacroSettings/home', label: 'Macro Settings' },
+    'home page layouts':         { url: '/lightning/setup/HomePageLayouts/home', label: 'Home Page Layouts' },
+    'record page settings':      { url: '/lightning/setup/RecordPageSettings/home', label: 'Record Page Settings' },
+    'chatter settings':          { url: '/lightning/setup/CollaborationSettings/home', label: 'Chatter Settings' },
+    'feed tracking':             { url: '/lightning/setup/FeedTracking/home', label: 'Feed Tracking' },
+    'activity settings':         { url: '/lightning/setup/HomeActivitiesSetupPage/home', label: 'Activity Settings' },
+    'task settings':             { url: '/lightning/setup/HomeActivitiesSetupPage/home', label: 'Activity Settings' },
+    'search settings':           { url: '/lightning/setup/SearchSettings/home', label: 'Search Settings' },
+    'user interface':            { url: '/lightning/setup/UserInterfaceUI/home', label: 'User Interface' },
+    'ui settings':               { url: '/lightning/setup/UserInterfaceUI/home', label: 'User Interface' }
+};
+
+// Special pages registry (spoken name -> { url, label, external })
+const SPECIAL_PAGES = {
+    'home':                  { url: '/lightning/page/home', label: 'Home' },
+    'chatter':               { url: '/lightning/page/chatter', label: 'Chatter' },
+    'files':                 { url: '/lightning/o/ContentDocument/home', label: 'Files' },
+    'notes':                 { url: '/lightning/o/Note/home', label: 'Notes' },
+    'calendar':              { url: '/lightning/o/Event/home', label: 'Calendar' },
+    'recycle bin':           { url: '/lightning/o/RecycleBin/home', label: 'Recycle Bin' },
+    'trash':                 { url: '/lightning/o/RecycleBin/home', label: 'Recycle Bin' },
+    'developer console':     { url: '/_ui/common/apex/debug/ApexCSIPage', label: 'Developer Console' },
+    'dev console':           { url: '/_ui/common/apex/debug/ApexCSIPage', label: 'Developer Console' },
+    'my settings':           { url: '/lightning/settings/personal/PersonalInformation/home', label: 'My Settings' },
+    'personal settings':     { url: '/lightning/settings/personal/PersonalInformation/home', label: 'Personal Settings' },
+    'favorites':             { url: '/lightning/page/favorites', label: 'Favorites' },
+    'favourites':            { url: '/lightning/page/favorites', label: 'Favorites' },
+    'feed':                  { url: '/lightning/page/feed', label: 'Feed' },
+    'my tasks':              { url: '/lightning/o/Task/home', label: 'My Tasks' },
+    'to do list':            { url: '/lightning/o/Task/home', label: 'Tasks' },
+    'to-do list':            { url: '/lightning/o/Task/home', label: 'Tasks' },
+    'todos':                 { url: '/lightning/o/Task/home', label: 'Tasks' },
+    'email':                 { url: '/lightning/o/EmailMessage/home', label: 'Email' },
+    'emails':                { url: '/lightning/o/EmailMessage/home', label: 'Email' },
+    'appexchange':           { url: 'https://appexchange.salesforce.com', label: 'AppExchange', external: true },
+    'app exchange':          { url: 'https://appexchange.salesforce.com', label: 'AppExchange', external: true },
+    'trailhead':             { url: 'https://trailhead.salesforce.com', label: 'Trailhead', external: true }
 };
 
 export default class VoiceNavigator extends NavigationMixin(LightningElement) {
-
     lastTranscript = '';
     status = 'Ready';
     isListening = false;
@@ -291,17 +511,16 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
     isSearching = false;
     confidenceValue = 0;
     transcriptText = '';
+    helpSectionsOpen = [];
 
     customObjects = {};
     speechSupported = true;
     _messageHandler;
-    _keyHandler;
 
     get speechEngineUrl() {
         return VOICE_RECOGNITION_SR;
     }
 
-    /** Loads custom object labels from Apex so voice commands can target them. */
     @wire(getObjectApiNames)
     wiredObjects({ error, data }) {
         if (data) {
@@ -312,7 +531,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             }
         }
         if (error) {
-            console.error('VoiceNavigator: failed to load custom objects', error);
+            console.error('Error loading objects:', error);
         }
     }
 
@@ -378,15 +597,6 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         window.addEventListener('keydown', this._keyHandler);
     }
 
-    disconnectedCallback() {
-        if (this._messageHandler) {
-            window.removeEventListener('message', this._messageHandler);
-        }
-        if (this._keyHandler) {
-            window.removeEventListener('keydown', this._keyHandler);
-        }
-    }
-
     handleKeyboardShortcut(event) {
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
         const isShortcut = isMac
@@ -400,14 +610,9 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         }
     }
 
-    /**
-     * Handles inbound postMessage events from the speech recognition iframe.
-     * Only processes messages from the same origin for security.
-     */
     handleVoiceMessage(event) {
-        if (event.origin !== window.location.origin) {
-            return;
-        }
+        // Validate origin — static resources are served same-origin in Lightning
+        if (event.origin !== window.location.origin) return;
         if (!event.data || !event.data.type) return;
 
         const { type } = event.data;
@@ -438,7 +643,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             const confidence = event.data.confidence;
             this.confidenceValue = Math.round(confidence * 100);
             this.transcriptText = `"${transcript}"`;
-            this.lastTranscript = `"${transcript}" (${this.confidenceValue}%)`;
+            this.lastTranscript = `"${transcript}" (${this.confidenceValue}% confidence)`;
             this.parseAndNavigate(transcript);
         }
 
@@ -458,7 +663,6 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         }
     }
 
-    /** Starts or stops speech recognition via the iframe. */
     toggleListening() {
         if (!this.speechSupported) {
             this.errorMessage = 'Speech recognition is not supported. Use Google Chrome.';
@@ -474,7 +678,6 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             return;
         }
 
-        // postMessage uses '*' because the iframe is a same-origin static resource
         if (this.isListening) {
             this.isListening = false;
             iframe.contentWindow.postMessage({ action: 'stop' }, '*');
@@ -487,11 +690,6 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
 
     // Command parsing
 
-    /**
-     * Entry point for the command parser. Normalises the transcript then
-     * tries each command pattern in priority order. Falls through to an
-     * error message if nothing matches.
-     */
     parseAndNavigate(transcript) {
         this.actionMessage = '';
         this.errorMessage = '';
@@ -502,6 +700,8 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             .replace(/\s+/g, ' ')
             .trim();
 
+        if (this.tryHelpCommand(text)) return;
+        if (this.tryBrowserAction(text)) return;
         if (this.trySearchRecord(text)) return;
         if (this.tryCreateField(text)) return;
         if (this.tryObjectSubpage(text)) return;
@@ -513,6 +713,57 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         this.errorMessage = `Command not recognized: "${transcript}". Say "help" or check the commands list below.`;
         this.status = 'Not recognized';
         this.speakFeedback('Command not recognized. Please try again.');
+    }
+
+    tryHelpCommand(text) {
+        const helpPatterns = [
+            /^help$/,
+            /^what can you do$/,
+            /^list commands$/,
+            /^what commands/,
+            /^show commands/,
+            /^commands$/,
+            /^voice commands$/,
+            /^what do you support$/
+        ];
+
+        for (const pattern of helpPatterns) {
+            if (pattern.test(text)) {
+                this.actionMessage = 'I can navigate to objects, create records, search records, open Setup pages, '
+                    + 'and go to Object Manager subpages. Expand the help section below for examples.';
+                this.status = 'Ready';
+                this.speakFeedback(
+                    'I can help you navigate Salesforce. Try saying go to accounts, create new contact, '
+                    + 'find account Acme, or open profiles. See the help section for more commands.'
+                );
+                this.helpSectionsOpen = ['help'];
+                return true;
+            }
+        }
+        return false;
+    }
+
+    tryBrowserAction(text) {
+        if (/^(?:go\s+back|back|previous\s+page|go\s+to\s+previous)$/.test(text)) {
+            this.actionMessage = 'Going back...';
+            this.status = 'Navigating';
+            this.speakFeedback('Going back.');
+            window.history.back();
+            return true;
+        }
+
+        if (/^(?:refresh|reload|refresh\s+page|reload\s+page)$/.test(text)) {
+            this.actionMessage = 'Refreshing page...';
+            this.status = 'Navigating';
+            this.speakFeedback('Refreshing the page.');
+            // eslint-disable-next-line @lwc/lwc/no-async-operation
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+            return true;
+        }
+
+        return false;
     }
 
     tryCreateField(text) {
@@ -544,7 +795,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         let matchedSubpage = null;
         let remainder = null;
 
-        // Exact substring match (longest key first)
+        // Pass 1: Exact substring match (longest key first)
         for (const key of subpageKeys) {
             const idx = text.indexOf(key);
             if (idx !== -1) {
@@ -554,7 +805,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             }
         }
 
-        // Fuzzy match multi-word phrases
+        // Pass 2: Fuzzy match multi-word phrases
         if (!matchedSubpage) {
             const words = text.split(' ');
             for (let len = Math.min(words.length, 4); len >= 1; len--) {
@@ -574,8 +825,9 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
 
         if (!matchedSubpage || !remainder) return false;
 
+        // Clean up remainder to extract the object name
         let objectPortion = remainder
-            .replace(/^(?:please\s+)?(?:go|navigate|open|show|view|see|list|take me|bring me|jump|switch|head|visit|pull up|check|access|get|display)\s*/i, '')
+            .replace(NAV_STRIP_REGEX, '')
             .replace(/^(?:to|for|on|of|in|me)\s*/i, '')
             .replace(/\s+(?:for|on|of|in)\s*$/i, '')
             .replace(/^(?:the|a|an)\s*/i, '')
@@ -594,13 +846,13 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
 
     trySetupPage(text) {
         let cleaned = text
-            .replace(/^(?:please\s+)?(?:go|navigate|open|show|take me|bring me|jump|switch|head|visit|pull up|check|view|see|access|get|move|direct me|send me|redirect me|launch|load|display|i want|i need|let me see|can you open|can you show)\s+(?:to\s+|me\s+)?/i, '')
+            .replace(NAV_STRIP_REGEX, '')
             .replace(/^(?:the|a|an)\s+/i, '')
             .trim();
 
         const candidates = [cleaned, text];
 
-        // Exact match
+        // Pass 1: Exact match
         for (const candidate of candidates) {
             if (SETUP_PAGES[candidate]) {
                 const page = SETUP_PAGES[candidate];
@@ -609,7 +861,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             }
         }
 
-        // Substring match (longest key first)
+        // Pass 2: Substring match (longest key first)
         const setupKeys = Object.keys(SETUP_PAGES).sort((a, b) => b.length - a.length);
         for (const key of setupKeys) {
             if (cleaned.includes(key) || text.includes(key)) {
@@ -619,7 +871,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             }
         }
 
-        // Fuzzy match on full text
+        // Pass 3: Fuzzy match on full text
         for (const candidate of candidates) {
             const threshold = candidate.length <= 5 ? 1 :
                              candidate.length <= 10 ? 2 : 3;
@@ -630,7 +882,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             }
         }
 
-        // Fuzzy match multi-word slices
+        // Pass 4: Fuzzy match multi-word slices
         const words = cleaned.split(' ');
         if (words.length >= 2) {
             for (let len = Math.min(words.length, 5); len >= 2; len--) {
@@ -663,7 +915,14 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
 
                 const objectName = this.resolveObject(spoken);
                 if (objectName) {
-                    if (objectName === '__report__' || objectName === '__dashboard__') continue;
+                    if (objectName === '__report__') {
+                        this.navigateToUrl('/lightning/o/Report/new', 'Creating new report...');
+                        return true;
+                    }
+                    if (objectName === '__dashboard__') {
+                        this.navigateToUrl('/lightning/o/Dashboard/new', 'Creating new dashboard...');
+                        return true;
+                    }
                     this.navigateToNewRecord(objectName);
                     return true;
                 }
@@ -674,7 +933,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
 
     tryNavigateObject(text) {
         const patterns = [
-            /(?:please\s+)?(?:go|navigate|open|show|take me|bring me|jump|switch|head|visit|pull up|check|view|see|access|get|move|launch|load|display)\s+(?:to\s+|me\s+)?(.+)/,
+            NAV_CAPTURE_REGEX,
             /^(.+?)(?:\s+page|\s+home|\s+list)?$/
         ];
 
@@ -701,44 +960,55 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
     }
 
     trySpecialPages(text) {
-        const specialPages = {
-            'home': '/lightning/page/home',
-            'chatter': '/lightning/page/chatter',
-            'files': '/lightning/o/ContentDocument/home',
-            'notes': '/lightning/o/Note/home',
-            'calendar': '/lightning/o/Event/home'
-        };
+        // Global search is a special case
+        if (text.includes('global search') || text === 'search' || text === 'search bar') {
+            this.actionMessage = 'Use the search bar at the top of the page (Ctrl+/ or Cmd+/).';
+            this.status = 'Ready';
+            this.speakFeedback('Use the search bar at the top of the page.');
+            return true;
+        }
 
-        for (const [keyword, url] of Object.entries(specialPages)) {
-            if (text.includes(keyword)) {
-                this.navigateToUrl(url, `Opening ${keyword}...`);
-                return true;
+        const cleaned = text.replace(NAV_STRIP_REGEX, '')
+            .replace(/^(?:the|a|an)\s+/i, '')
+            .trim();
+
+        const candidates = [cleaned, text];
+
+        for (const candidate of candidates) {
+            for (const [keyword, page] of Object.entries(SPECIAL_PAGES)) {
+                if (candidate.includes(keyword)) {
+                    if (page.external) {
+                        this.actionMessage = `Opening ${page.label} (external site)...`;
+                        this.status = 'Navigating';
+                        this.speakFeedback(`Opening ${page.label}.`);
+                        window.open(page.url, '_blank');
+                    } else {
+                        this.navigateToUrl(page.url, `Opening ${page.label}...`);
+                    }
+                    return true;
+                }
             }
         }
+
         return false;
     }
 
     // Object resolution
 
-    /**
-     * Resolves a spoken phrase to a Salesforce object API name.
-     * Tries exact match, plural stripping, fuzzy matching, and
-     * finally constructs a custom object name as a last resort.
-     *
-     * @param {string} spoken - the raw spoken object name
-     * @returns {string|null} the API name or null if unresolved
-     */
     resolveObject(spoken) {
         const normalized = spoken.toLowerCase().replace(/\s+/g, ' ').trim();
 
+        // 1. Exact match in standard objects
         if (STANDARD_OBJECTS[normalized]) {
             return STANDARD_OBJECTS[normalized];
         }
+
+        // 2. Exact match in custom objects
         if (this.customObjects[normalized]) {
             return this.customObjects[normalized];
         }
 
-        // Strip trailing "s" for basic plural handling
+        // 3. Try stripping trailing 's' for plurals
         const singular = normalized.replace(/s$/, '');
         if (STANDARD_OBJECTS[singular]) {
             return STANDARD_OBJECTS[singular];
@@ -747,25 +1017,33 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             return this.customObjects[singular];
         }
 
-        // Fuzzy match — tolerance scales with word length
+        // 4. Fuzzy match
         const fuzzyThreshold = normalized.length <= 4 ? 1 :
                                normalized.length <= 7 ? 2 : 3;
 
         const standardMatch = findFuzzyMatch(normalized, STANDARD_OBJECTS, fuzzyThreshold);
-        if (standardMatch) return standardMatch.apiName;
-
-        const customMatch = findFuzzyMatch(normalized, this.customObjects, fuzzyThreshold);
-        if (customMatch) return customMatch.apiName;
-
-        if (singular !== normalized) {
-            const singularStdMatch = findFuzzyMatch(singular, STANDARD_OBJECTS, fuzzyThreshold);
-            if (singularStdMatch) return singularStdMatch.apiName;
-
-            const singularCustMatch = findFuzzyMatch(singular, this.customObjects, fuzzyThreshold);
-            if (singularCustMatch) return singularCustMatch.apiName;
+        if (standardMatch) {
+            return standardMatch.apiName;
         }
 
-        // Last resort: assume a custom object API name
+        const customMatch = findFuzzyMatch(normalized, this.customObjects, fuzzyThreshold);
+        if (customMatch) {
+            return customMatch.apiName;
+        }
+
+        // 5. Fuzzy match with singular form
+        if (singular !== normalized) {
+            const singularStdMatch = findFuzzyMatch(singular, STANDARD_OBJECTS, fuzzyThreshold);
+            if (singularStdMatch) {
+                return singularStdMatch.apiName;
+            }
+            const singularCustMatch = findFuzzyMatch(singular, this.customObjects, fuzzyThreshold);
+            if (singularCustMatch) {
+                return singularCustMatch.apiName;
+            }
+        }
+
+        // 6. Last resort: construct custom object API name
         const customApiName = normalized.replace(/\s/g, '_') + '__c';
         if (normalized.length > 1 && !normalized.includes('field') && !normalized.includes('setup')) {
             return customApiName.charAt(0).toUpperCase() + customApiName.slice(1);
@@ -777,13 +1055,23 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
     // Record search
 
     trySearchRecord(text) {
-        const objectScopedPattern = /(?:find|search|look\s+up|look\s+for|locate|fetch|get me|pull up)\s+(\w+)\s+(.+)/;
-        const generalPattern = /(?:find|search|look\s+up|look\s+for|locate|fetch|get me|pull up)\s+(.+)/;
+        // "who is" pattern for natural contact/user lookups
+        const whoIsPattern = /(?:who\s+is|who's)\s+(.+)/;
+        const whoIsMatch = text.match(whoIsPattern);
+        if (whoIsMatch) {
+            const searchTerm = this.stripArticles(whoIsMatch[1].trim());
+            if (searchTerm.length >= 2) {
+                this.executeSearch('Contact', searchTerm);
+                return true;
+            }
+        }
 
+        // Object-scoped: "find account Acme" / "search contact John"
+        const objectScopedPattern = /(?:find|search|look\s+up|look\s+for|locate|fetch|get me|pull up|search\s+for)\s+(\w+)\s+(.+)/;
         const objectScopedMatch = text.match(objectScopedPattern);
         if (objectScopedMatch) {
             const possibleObject = objectScopedMatch[1].trim();
-            const searchTerm = objectScopedMatch[2].trim();
+            let searchTerm = this.stripArticles(objectScopedMatch[2].trim());
             const objectApiName = this.resolveObject(possibleObject);
 
             if (objectApiName && objectApiName !== '__report__' && objectApiName !== '__dashboard__'
@@ -793,9 +1081,13 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             }
         }
 
+        // General: "find Acme" / "search John Smith" / "search for John Smith"
+        const generalPattern = /(?:find|search|look\s+up|look\s+for|locate|fetch|get me|pull up|search\s+for)\s+(.+)/;
         const generalMatch = text.match(generalPattern);
         if (generalMatch) {
-            const searchTerm = generalMatch[1].trim();
+            let searchTerm = generalMatch[1].trim();
+            searchTerm = searchTerm.replace(/^for\s+/i, '');
+            searchTerm = this.stripArticles(searchTerm);
             if (searchTerm.length >= 2) {
                 this.executeSearch(null, searchTerm);
                 return true;
@@ -805,7 +1097,13 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         return false;
     }
 
-    /** Calls the Apex search method and populates the results panel. */
+    stripArticles(text) {
+        return text
+            .replace(/^(?:the|a|an)\s+/i, '')
+            .replace(/\s+(?:the|a|an)$/i, '')
+            .trim();
+    }
+
     async executeSearch(objectApiName, searchTerm) {
         this.isSearching = true;
         this.actionMessage = objectApiName
@@ -854,7 +1152,16 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         }
     }
 
-    // Navigation
+    // Voice feedback
+
+    speakFeedback(text) {
+        const iframe = this.refs.voiceFrame;
+        if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage({ action: 'speak', text: text }, '*');
+        }
+    }
+
+    // Navigation methods
 
     navigateToNewField(objectApiName) {
         const url = `/lightning/setup/ObjectManager/${objectApiName}/FieldsAndRelationships/new`;
@@ -901,13 +1208,12 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         window.open(url, '_blank');
     }
 
-    // Voice feedback
-
-    /** Sends text to the speech synthesis engine inside the iframe. */
-    speakFeedback(text) {
-        const iframe = this.refs.voiceFrame;
-        if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage({ action: 'speak', text: text }, '*');
+    disconnectedCallback() {
+        if (this._messageHandler) {
+            window.removeEventListener('message', this._messageHandler);
+        }
+        if (this._keyHandler) {
+            window.removeEventListener('keydown', this._keyHandler);
         }
     }
 }
