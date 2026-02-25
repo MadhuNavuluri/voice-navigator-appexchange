@@ -333,6 +333,7 @@ const SETUP_PAGES = {
     'app builder':               { url: '/lightning/setup/FlexiPageList/home', label: 'Lightning App Builder' },
     'tabs':                      { url: '/lightning/setup/CustomTabs/home', label: 'Tabs' },
     'custom tabs':               { url: '/lightning/setup/CustomTabs/home', label: 'Tabs' },
+    'custom tab':                { url: '/lightning/setup/CustomTabs/home', label: 'Tabs' },
     'global actions':            { url: '/lightning/setup/GlobalActions/home', label: 'Global Actions' },
     'themes and branding':       { url: '/lightning/setup/ThemingAndBranding/home', label: 'Themes and Branding' },
     'themes':                    { url: '/lightning/setup/ThemingAndBranding/home', label: 'Themes and Branding' },
@@ -611,7 +612,6 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
     }
 
     handleVoiceMessage(event) {
-        // Validate origin — static resources are served same-origin in Lightning
         if (event.origin !== window.location.origin) return;
         if (!event.data || !event.data.type) return;
 
@@ -707,8 +707,8 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         if (this.tryObjectSubpage(text)) return;
         if (this.trySetupPage(text)) return;
         if (this.tryCreateRecord(text)) return;
-        if (this.tryNavigateObject(text)) return;
         if (this.trySpecialPages(text)) return;
+        if (this.tryNavigateObject(text)) return;
 
         this.errorMessage = `Command not recognized: "${transcript}". Say "help" or check the commands list below.`;
         this.status = 'Not recognized';
@@ -752,7 +752,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             return true;
         }
 
-        if (/^(?:refresh|reload|refresh\s+page|reload\s+page)$/.test(text)) {
+        if (/(?:refresh|reload)(?:\s+(?:the\s+)?page)?/.test(text)) {
             this.actionMessage = 'Refreshing page...';
             this.status = 'Navigating';
             this.speakFeedback('Refreshing the page.');
