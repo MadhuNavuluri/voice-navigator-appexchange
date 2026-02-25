@@ -276,6 +276,8 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
     @track errorMessage = '';
     @track searchResults = [];
     @track isSearching = false;
+    @track confidenceValue = 0;
+    @track transcriptText = '';
 
     customObjects = {};
     speechSupported = true; // Assume supported until VF page says otherwise
@@ -312,8 +314,21 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
     }
 
     get statusBadgeClass() {
-        if (this.isListening) return 'slds-badge slds-badge_success';
-        return 'slds-badge';
+        if (this.isListening) return 'status-badge status-listening';
+        if (this.status === 'Ready') return 'status-badge status-ready';
+        if (this.status === 'Navigating') return 'status-badge status-navigating';
+        if (this.status === 'Searching') return 'status-badge status-searching';
+        if (this.status === 'Not recognized' || this.status === 'Error' ||
+            this.status === 'No speech detected' || this.status === 'Mic blocked' ||
+            this.status === 'Speech not supported') return 'status-badge status-error';
+        return 'status-badge status-ready';
+    }
+
+    get showStatusDot() {
+        return this.status === 'Ready' || this.isListening ||
+               this.status === 'Not recognized' || this.status === 'Error' ||
+               this.status === 'No speech detected' || this.status === 'Mic blocked' ||
+               this.status === 'Speech not supported';
     }
 
     get hasSearchResults() {
@@ -321,8 +336,30 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
     }
 
     get shortcutHint() {
-        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-        return isMac ? '\u2325 + Space to toggle voice' : 'Ctrl + Space to toggle voice';
+        return 'Click to speak | \u2325+Space | Ctrl+Space';
+    }
+
+    // Confidence indicator getters
+    get confidenceDisplay() {
+        return this.confidenceValue ? `${this.confidenceValue}%` : '';
+    }
+
+    get confidenceBarWidth() {
+        return `width: ${this.confidenceValue || 0}%`;
+    }
+
+    get confidenceBarClass() {
+        const val = this.confidenceValue || 0;
+        if (val >= 80) return 'confidence-bar-fill confidence-high';
+        if (val >= 60) return 'confidence-bar-fill confidence-medium';
+        return 'confidence-bar-fill confidence-low';
+    }
+
+    get confidenceLabelClass() {
+        const val = this.confidenceValue || 0;
+        if (val >= 80) return 'confidence-label confidence-label-high';
+        if (val >= 60) return 'confidence-label confidence-label-medium';
+        return 'confidence-label confidence-label-low';
     }
 
     connectedCallback() {
@@ -378,7 +415,9 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         if (type === 'voiceResult') {
             const transcript = event.data.transcript.toLowerCase().trim();
             const confidence = event.data.confidence;
-            this.lastTranscript = `"${transcript}" (${Math.round(confidence * 100)}% confidence)`;
+            this.confidenceValue = Math.round(confidence * 100);
+            this.transcriptText = `"${transcript}"`;
+            this.lastTranscript = `"${transcript}" (${this.confidenceValue}% confidence)`;
             this.parseAndNavigate(transcript);
         }
 

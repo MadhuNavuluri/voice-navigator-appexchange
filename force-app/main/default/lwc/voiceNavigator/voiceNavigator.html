@@ -5,42 +5,81 @@
             <iframe src={speechEngineUrl} class="voice-iframe" lwc:ref="voiceFrame" allow="microphone *"></iframe>
 
             <!-- Mic Button -->
-            <div class="slds-grid slds-grid_align-center slds-m-bottom_medium">
-                <button class={micButtonClass} onclick={toggleListening} title="Toggle Voice (Option+Space / Ctrl+Space)">
-                    <lightning-icon
-                        icon-name={micIcon}
-                        size="medium"
-                        alternative-text="Microphone">
-                    </lightning-icon>
+            <div class="slds-grid slds-grid_align-center slds-m-bottom_small">
+                <button class={micButtonClass} onclick={toggleListening} title="Click to speak | ⌥+Space (Mac) • Ctrl+Space (Win)">
+                    <template if:false={isListening}>
+                        <svg class="mic-svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                        </svg>
+                    </template>
+                    <template if:true={isListening}>
+                        <svg class="mic-svg mic-svg-active" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="6" y="4" width="12" height="16" rx="2"/>
+                        </svg>
+                    </template>
                 </button>
             </div>
+
+            <!-- Sound Wave Animation (visible when listening) -->
+            <template if:true={isListening}>
+                <div class="sound-wave-container fade-in">
+                    <div class="sound-bar"></div>
+                    <div class="sound-bar"></div>
+                    <div class="sound-bar"></div>
+                    <div class="sound-bar"></div>
+                    <div class="sound-bar"></div>
+                </div>
+            </template>
+
+            <!-- Hint Text -->
             <div class="slds-text-align_center slds-m-bottom_small">
-                <p class="slds-text-body_small slds-text-color_weak shortcut-hint">{shortcutHint}</p>
+                <p class="shortcut-hint">{shortcutHint}</p>
+                <!-- Welcome hint for first-time users -->
+                <template if:false={lastTranscript}>
+                    <p class="welcome-hint">Try saying "Go to accounts" or "Find Acme"</p>
+                </template>
             </div>
 
-            <!-- Status -->
+            <!-- Status Badge with Icons -->
             <div class="slds-text-align_center slds-m-bottom_small">
-                <span class={statusBadgeClass}>{status}</span>
+                <span class={statusBadgeClass}>
+                    <template if:true={showStatusDot}>
+                        <span class="status-dot"></span>
+                    </template>
+                    <template if:true={isSearching}>
+                        <lightning-spinner alternative-text="Processing" size="xx-small"></lightning-spinner>
+                    </template>
+                    {status}
+                </span>
             </div>
 
-            <!-- Transcript -->
+            <!-- Transcript with Confidence Indicator -->
             <template if:true={lastTranscript}>
-                <div class="slds-box slds-theme_shade slds-m-bottom_small">
+                <div class="slds-box slds-theme_shade slds-m-bottom_small fade-in">
                     <p class="slds-text-body_small slds-text-color_weak">Last Command:</p>
-                    <p class="slds-text-body_regular">{lastTranscript}</p>
+                    <p class="slds-text-body_regular">{transcriptText}</p>
+                    <template if:true={confidenceValue}>
+                        <div class="confidence-container">
+                            <div class="confidence-bar-bg">
+                                <div class={confidenceBarClass} style={confidenceBarWidth}></div>
+                            </div>
+                            <span class={confidenceLabelClass}>{confidenceDisplay}</span>
+                        </div>
+                    </template>
                 </div>
             </template>
 
             <!-- Action Taken -->
             <template if:true={actionMessage}>
-                <div class="slds-box slds-theme_success slds-m-bottom_small">
+                <div class="slds-box slds-theme_success slds-m-bottom_small fade-in">
                     <p class="slds-text-body_small">{actionMessage}</p>
                 </div>
             </template>
 
             <!-- Search Loading -->
             <template if:true={isSearching}>
-                <div class="slds-m-bottom_small slds-text-align_center">
+                <div class="slds-m-bottom_small slds-text-align_center fade-in">
                     <lightning-spinner alternative-text="Searching" size="small"></lightning-spinner>
                     <p class="slds-text-body_small slds-m-top_x-small">Searching...</p>
                 </div>
@@ -48,7 +87,7 @@
 
             <!-- Search Results -->
             <template if:true={hasSearchResults}>
-                <div class="slds-box slds-m-bottom_small search-results-container">
+                <div class="slds-box slds-m-bottom_small search-results-container fade-in">
                     <p class="slds-text-title_caps slds-m-bottom_x-small">Search Results</p>
                     <ul class="slds-has-dividers_bottom-space">
                         <template for:each={searchResults} for:item="result">
@@ -75,7 +114,7 @@
 
             <!-- Error -->
             <template if:true={errorMessage}>
-                <div class="slds-box slds-theme_error slds-m-bottom_small">
+                <div class="slds-box slds-theme_error slds-m-bottom_small fade-in">
                     <p class="slds-text-body_small">{errorMessage}</p>
                 </div>
             </template>

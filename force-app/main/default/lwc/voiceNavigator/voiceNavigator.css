@@ -6,22 +6,40 @@
     overflow: hidden;
 }
 
+/* ── Mic Button ─────────────────────────────────────────── */
 .mic-button {
-    width: 64px;
-    height: 64px;
+    width: 80px;
+    height: 80px;
     border-radius: 50%;
-    background-color: #f3f3f3;
-    border: 2px solid #dddbda;
+    background-color: #ffffff;
+    border: 3px solid #0176d3;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.3s ease;
+    position: relative;
+}
+
+.mic-svg {
+    width: 36px;
+    height: 36px;
+    fill: #0176d3;
+    transition: fill 0.3s ease;
+}
+
+.mic-svg-active {
+    fill: #ffffff;
 }
 
 .mic-button:hover {
-    background-color: #e1e1e1;
-    transform: scale(1.05);
+    background-color: #eaf5fe;
+    transform: scale(1.08);
+    box-shadow: 0 4px 12px rgba(1, 118, 211, 0.25);
+}
+
+.mic-button:hover .mic-svg {
+    fill: #014486;
 }
 
 .mic-active {
@@ -30,8 +48,37 @@
     animation: pulse 1.5s infinite;
 }
 
-.mic-active lightning-icon {
-    --lwc-colorTextIconDefault: white;
+.mic-active:hover .mic-svg {
+    fill: #ffffff;
+}
+
+/* ── Sound Wave Bars (visible when listening) ───────────── */
+.sound-wave-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 24px;
+    margin-top: 8px;
+}
+
+.sound-bar {
+    width: 4px;
+    height: 8px;
+    background-color: #c23934;
+    border-radius: 2px;
+    animation: soundWave 0.8s ease-in-out infinite;
+}
+
+.sound-bar:nth-child(1) { animation-delay: 0s; }
+.sound-bar:nth-child(2) { animation-delay: 0.1s; }
+.sound-bar:nth-child(3) { animation-delay: 0.2s; }
+.sound-bar:nth-child(4) { animation-delay: 0.3s; }
+.sound-bar:nth-child(5) { animation-delay: 0.4s; }
+
+@keyframes soundWave {
+    0%, 100% { height: 6px; }
+    50% { height: 22px; }
 }
 
 @keyframes pulse {
@@ -39,13 +86,141 @@
         box-shadow: 0 0 0 0 rgba(194, 57, 52, 0.5);
     }
     70% {
-        box-shadow: 0 0 0 15px rgba(194, 57, 52, 0);
+        box-shadow: 0 0 0 18px rgba(194, 57, 52, 0);
     }
     100% {
         box-shadow: 0 0 0 0 rgba(194, 57, 52, 0);
     }
 }
 
+/* ── Hint & Welcome Text ────────────────────────────────── */
+.shortcut-hint {
+    font-size: 11px;
+    color: #706e6b;
+    letter-spacing: 0.2px;
+    margin-top: 4px;
+    white-space: nowrap;
+}
+
+.welcome-hint {
+    font-size: 11px;
+    color: #939393;
+    font-style: italic;
+    margin-top: 2px;
+}
+
+/* ── Status Badge with Icons ────────────────────────────── */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.status-ready {
+    background-color: #e8f5e9;
+    color: #2e844a;
+}
+
+.status-ready .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #2e844a;
+}
+
+.status-listening {
+    background-color: #fdecea;
+    color: #c23934;
+}
+
+.status-listening .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #c23934;
+    animation: statusPulse 1s infinite;
+}
+
+@keyframes statusPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.status-navigating {
+    background-color: #eaf5fe;
+    color: #0176d3;
+}
+
+.status-searching {
+    background-color: #eaf5fe;
+    color: #0176d3;
+}
+
+.status-error {
+    background-color: #fef3e8;
+    color: #e86e00;
+}
+
+.status-error .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #e86e00;
+}
+
+/* ── Confidence Indicator ───────────────────────────────── */
+.confidence-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.confidence-bar-bg {
+    flex: 1;
+    height: 6px;
+    background-color: #e5e5e5;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.confidence-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+.confidence-high { background-color: #2e844a; }
+.confidence-medium { background-color: #e8a300; }
+.confidence-low { background-color: #c23934; }
+
+.confidence-label {
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 36px;
+    text-align: right;
+}
+
+.confidence-label-high { color: #2e844a; }
+.confidence-label-medium { color: #e8a300; }
+.confidence-label-low { color: #c23934; }
+
+/* ── Fade-in Transitions ────────────────────────────────── */
+.fade-in {
+    animation: fadeIn 0.35s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Existing Styles (updated) ──────────────────────────── */
 .slds-badge_success {
     background-color: #2e844a;
     color: white;
@@ -84,10 +259,4 @@
 
 .search-result-name {
     font-weight: 500;
-}
-
-.shortcut-hint {
-    font-size: 11px;
-    opacity: 0.7;
-    letter-spacing: 0.3px;
 }
