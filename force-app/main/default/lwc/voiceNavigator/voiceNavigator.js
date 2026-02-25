@@ -1,10 +1,19 @@
-import { LightningElement, track, wire } from 'lwc';
+/**
+ * Voice Navigator — voice-controlled navigation for Salesforce Lightning.
+ * Lets users navigate Setup pages, objects, records, and Object Manager
+ * using natural spoken commands. Speech recognition runs in a sandboxed
+ * iframe loaded from a static resource to work within Locker Service.
+ *
+ * @author  Madhu Navuluri
+ * @version 1.2.0
+ */
+import { LightningElement, wire } from 'lwc';
 import { NavigationMixin } from 'lightning/navigation';
 import getObjectApiNames from '@salesforce/apex/VoiceNavigatorController.getObjectApiNames';
 import searchRecords from '@salesforce/apex/VoiceNavigatorController.searchRecords';
 import VOICE_RECOGNITION_SR from '@salesforce/resourceUrl/VoiceRecognitionSR';
 
-// Standard object mapping (spoken name -> API name)
+// Spoken name to API name mapping for standard objects
 const STANDARD_OBJECTS = {
     'account': 'Account',
     'accounts': 'Account',
@@ -42,7 +51,10 @@ const STANDARD_OBJECTS = {
     'dashboards': '__dashboard__'
 };
 
-// Levenshtein edit distance for fuzzy matching misspoken object names
+/**
+ * Computes the Levenshtein edit distance between two strings.
+ * Used to tolerate minor speech recognition errors and accents.
+ */
 function levenshteinDistance(a, b) {
     const m = a.length;
     const n = b.length;
@@ -72,7 +84,7 @@ function levenshteinDistance(a, b) {
     return prevRow[n];
 }
 
-// Find closest matching key from candidates within maxDistance
+/** Finds the closest key in a flat {key: apiName} map within the allowed distance. */
 function findFuzzyMatch(input, candidates, maxDistance) {
     let bestMatch = null;
     let bestDistance = maxDistance + 1;
@@ -88,7 +100,7 @@ function findFuzzyMatch(input, candidates, maxDistance) {
     return bestDistance <= maxDistance ? bestMatch : null;
 }
 
-// Fuzzy match for registry objects (where values are {url/path, label} objects)
+/** Finds the closest key in a registry where values are {url/path, label} objects. */
 function findFuzzyMatchInRegistry(input, registry, maxDistance) {
     let bestMatch = null;
     let bestDistance = maxDistance + 1;
@@ -104,7 +116,7 @@ function findFuzzyMatchInRegistry(input, registry, maxDistance) {
     return bestDistance <= maxDistance ? bestMatch : null;
 }
 
-// Object Manager subpage registry (spoken name -> { path, label })
+// Object Manager sub-page registry
 const OBJECT_SUBPAGES = {
     'fields':                    { path: 'FieldsAndRelationships/view', label: 'Fields & Relationships' },
     'fields and relationships':  { path: 'FieldsAndRelationships/view', label: 'Fields & Relationships' },
@@ -145,7 +157,7 @@ const OBJECT_SUBPAGES = {
     'new field':                 { path: 'FieldsAndRelationships/new', label: 'New Field' },
 };
 
-// Setup pages registry (spoken name -> { url, label })
+// Setup page registry — 120+ pages organized by category
 const SETUP_PAGES = {
     // Administration
     'users':                     { url: '/lightning/setup/ManageUsers/home', label: 'Users' },
@@ -269,26 +281,27 @@ const SETUP_PAGES = {
 };
 
 export default class VoiceNavigator extends NavigationMixin(LightningElement) {
-    @track lastTranscript = '';
-    @track status = 'Ready';
-    @track isListening = false;
-    @track actionMessage = '';
-    @track errorMessage = '';
-    @track searchResults = [];
-    @track isSearching = false;
-    @track confidenceValue = 0;
-    @track transcriptText = '';
+
+    lastTranscript = '';
+    status = 'Ready';
+    isListening = false;
+    actionMessage = '';
+    errorMessage = '';
+    searchResults = [];
+    isSearching = false;
+    confidenceValue = 0;
+    transcriptText = '';
 
     customObjects = {};
-    speechSupported = true; // Assume supported until VF page says otherwise
+    speechSupported = true;
     _messageHandler;
+    _keyHandler;
 
-    // Use static resource for speech recognition (avoids CSP/clickjack iframe issues)
     get speechEngineUrl() {
         return VOICE_RECOGNITION_SR;
     }
 
-    // Wire custom objects from Apex
+    /** Loads custom object labels from Apex so voice commands can target them. */
     @wire(getObjectApiNames)
     wiredObjects({ error, data }) {
         if (data) {
@@ -299,7 +312,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             }
         }
         if (error) {
-            console.error('Error loading objects:', error);
+            console.error('VoiceNavigator: failed to load custom objects', error);
         }
     }
 
@@ -307,10 +320,6 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         return this.isListening
             ? 'slds-button slds-button_icon slds-button_icon-border-filled mic-button mic-active'
             : 'slds-button slds-button_icon slds-button_icon-border-filled mic-button';
-    }
-
-    get micIcon() {
-        return this.isListening ? 'utility:stop' : 'utility:microphone';
     }
 
     get statusBadgeClass() {
@@ -339,7 +348,6 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         return 'Click to speak | \u2325+Space | Ctrl+Space';
     }
 
-    // Confidence indicator getters
     get confidenceDisplay() {
         return this.confidenceValue ? `${this.confidenceValue}%` : '';
     }
@@ -363,17 +371,23 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
     }
 
     connectedCallback() {
-        // Listen for messages from the VF iframe
         this._messageHandler = this.handleVoiceMessage.bind(this);
         window.addEventListener('message', this._messageHandler);
 
-        // Keyboard shortcut: Cmd+Space (Mac) or Ctrl+Space (Windows/Linux)
         this._keyHandler = this.handleKeyboardShortcut.bind(this);
         window.addEventListener('keydown', this._keyHandler);
     }
 
+    disconnectedCallback() {
+        if (this._messageHandler) {
+            window.removeEventListener('message', this._messageHandler);
+        }
+        if (this._keyHandler) {
+            window.removeEventListener('keydown', this._keyHandler);
+        }
+    }
+
     handleKeyboardShortcut(event) {
-        // Option+Space on Mac, Ctrl+Space on Windows/Linux
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
         const isShortcut = isMac
             ? (event.code === 'Space' && event.altKey)
@@ -386,7 +400,14 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         }
     }
 
+    /**
+     * Handles inbound postMessage events from the speech recognition iframe.
+     * Only processes messages from the same origin for security.
+     */
     handleVoiceMessage(event) {
+        if (event.origin !== window.location.origin) {
+            return;
+        }
         if (!event.data || !event.data.type) return;
 
         const { type } = event.data;
@@ -417,7 +438,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             const confidence = event.data.confidence;
             this.confidenceValue = Math.round(confidence * 100);
             this.transcriptText = `"${transcript}"`;
-            this.lastTranscript = `"${transcript}" (${this.confidenceValue}% confidence)`;
+            this.lastTranscript = `"${transcript}" (${this.confidenceValue}%)`;
             this.parseAndNavigate(transcript);
         }
 
@@ -437,6 +458,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         }
     }
 
+    /** Starts or stops speech recognition via the iframe. */
     toggleListening() {
         if (!this.speechSupported) {
             this.errorMessage = 'Speech recognition is not supported. Use Google Chrome.';
@@ -452,6 +474,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             return;
         }
 
+        // postMessage uses '*' because the iframe is a same-origin static resource
         if (this.isListening) {
             this.isListening = false;
             iframe.contentWindow.postMessage({ action: 'stop' }, '*');
@@ -462,8 +485,13 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         }
     }
 
-    // ─── COMMAND PARSING ENGINE ─────────────────────────────────────────
+    // Command parsing
 
+    /**
+     * Entry point for the command parser. Normalises the transcript then
+     * tries each command pattern in priority order. Falls through to an
+     * error message if nothing matches.
+     */
     parseAndNavigate(transcript) {
         this.actionMessage = '';
         this.errorMessage = '';
@@ -511,13 +539,12 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
     }
 
     tryObjectSubpage(text) {
-        // Try to find a known subpage name in the text, then extract the object name
         const subpageKeys = Object.keys(OBJECT_SUBPAGES).sort((a, b) => b.length - a.length);
 
         let matchedSubpage = null;
         let remainder = null;
 
-        // Pass 1: Exact substring match (longest key first)
+        // Exact substring match (longest key first)
         for (const key of subpageKeys) {
             const idx = text.indexOf(key);
             if (idx !== -1) {
@@ -527,7 +554,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             }
         }
 
-        // Pass 2: Fuzzy match multi-word phrases
+        // Fuzzy match multi-word phrases
         if (!matchedSubpage) {
             const words = text.split(' ');
             for (let len = Math.min(words.length, 4); len >= 1; len--) {
@@ -547,7 +574,6 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
 
         if (!matchedSubpage || !remainder) return false;
 
-        // Clean up remainder to extract the object name
         let objectPortion = remainder
             .replace(/^(?:please\s+)?(?:go|navigate|open|show|view|see|list|take me|bring me|jump|switch|head|visit|pull up|check|access|get|display)\s*/i, '')
             .replace(/^(?:to|for|on|of|in|me)\s*/i, '')
@@ -567,7 +593,6 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
     }
 
     trySetupPage(text) {
-        // Strip navigation verbs and prepositions (broad natural language support)
         let cleaned = text
             .replace(/^(?:please\s+)?(?:go|navigate|open|show|take me|bring me|jump|switch|head|visit|pull up|check|view|see|access|get|move|direct me|send me|redirect me|launch|load|display|i want|i need|let me see|can you open|can you show)\s+(?:to\s+|me\s+)?/i, '')
             .replace(/^(?:the|a|an)\s+/i, '')
@@ -575,7 +600,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
 
         const candidates = [cleaned, text];
 
-        // Pass 1: Exact match
+        // Exact match
         for (const candidate of candidates) {
             if (SETUP_PAGES[candidate]) {
                 const page = SETUP_PAGES[candidate];
@@ -584,7 +609,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             }
         }
 
-        // Pass 2: Substring match (longest key first)
+        // Substring match (longest key first)
         const setupKeys = Object.keys(SETUP_PAGES).sort((a, b) => b.length - a.length);
         for (const key of setupKeys) {
             if (cleaned.includes(key) || text.includes(key)) {
@@ -594,7 +619,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             }
         }
 
-        // Pass 3: Fuzzy match on full text
+        // Fuzzy match on full text
         for (const candidate of candidates) {
             const threshold = candidate.length <= 5 ? 1 :
                              candidate.length <= 10 ? 2 : 3;
@@ -605,7 +630,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             }
         }
 
-        // Pass 4: Fuzzy match multi-word slices
+        // Fuzzy match multi-word slices
         const words = cleaned.split(' ');
         if (words.length >= 2) {
             for (let len = Math.min(words.length, 5); len >= 2; len--) {
@@ -693,22 +718,27 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         return false;
     }
 
-    // ─── OBJECT RESOLUTION ──────────────────────────────────────────────
+    // Object resolution
 
+    /**
+     * Resolves a spoken phrase to a Salesforce object API name.
+     * Tries exact match, plural stripping, fuzzy matching, and
+     * finally constructs a custom object name as a last resort.
+     *
+     * @param {string} spoken - the raw spoken object name
+     * @returns {string|null} the API name or null if unresolved
+     */
     resolveObject(spoken) {
         const normalized = spoken.toLowerCase().replace(/\s+/g, ' ').trim();
 
-        // 1. Exact match in standard objects
         if (STANDARD_OBJECTS[normalized]) {
             return STANDARD_OBJECTS[normalized];
         }
-
-        // 2. Exact match in custom objects
         if (this.customObjects[normalized]) {
             return this.customObjects[normalized];
         }
 
-        // 3. Try stripping trailing 's' for plurals
+        // Strip trailing "s" for basic plural handling
         const singular = normalized.replace(/s$/, '');
         if (STANDARD_OBJECTS[singular]) {
             return STANDARD_OBJECTS[singular];
@@ -717,33 +747,25 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             return this.customObjects[singular];
         }
 
-        // 4. Fuzzy match — threshold scales with word length
+        // Fuzzy match — tolerance scales with word length
         const fuzzyThreshold = normalized.length <= 4 ? 1 :
                                normalized.length <= 7 ? 2 : 3;
 
         const standardMatch = findFuzzyMatch(normalized, STANDARD_OBJECTS, fuzzyThreshold);
-        if (standardMatch) {
-            return standardMatch.apiName;
-        }
+        if (standardMatch) return standardMatch.apiName;
 
         const customMatch = findFuzzyMatch(normalized, this.customObjects, fuzzyThreshold);
-        if (customMatch) {
-            return customMatch.apiName;
-        }
+        if (customMatch) return customMatch.apiName;
 
-        // 5. Fuzzy match with singular form
         if (singular !== normalized) {
             const singularStdMatch = findFuzzyMatch(singular, STANDARD_OBJECTS, fuzzyThreshold);
-            if (singularStdMatch) {
-                return singularStdMatch.apiName;
-            }
+            if (singularStdMatch) return singularStdMatch.apiName;
+
             const singularCustMatch = findFuzzyMatch(singular, this.customObjects, fuzzyThreshold);
-            if (singularCustMatch) {
-                return singularCustMatch.apiName;
-            }
+            if (singularCustMatch) return singularCustMatch.apiName;
         }
 
-        // 6. Last resort: construct custom object API name
+        // Last resort: assume a custom object API name
         const customApiName = normalized.replace(/\s/g, '_') + '__c';
         if (normalized.length > 1 && !normalized.includes('field') && !normalized.includes('setup')) {
             return customApiName.charAt(0).toUpperCase() + customApiName.slice(1);
@@ -752,15 +774,12 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         return null;
     }
 
-    // ─── NAVIGATION METHODS ─────────────────────────────────────────────
-
-    // ─── RECORD SEARCH ────────────────────────────────────────────────
+    // Record search
 
     trySearchRecord(text) {
         const objectScopedPattern = /(?:find|search|look\s+up|look\s+for|locate|fetch|get me|pull up)\s+(\w+)\s+(.+)/;
         const generalPattern = /(?:find|search|look\s+up|look\s+for|locate|fetch|get me|pull up)\s+(.+)/;
 
-        // Pattern 1: "find account Acme" / "search contact John"
         const objectScopedMatch = text.match(objectScopedPattern);
         if (objectScopedMatch) {
             const possibleObject = objectScopedMatch[1].trim();
@@ -774,7 +793,6 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
             }
         }
 
-        // Pattern 2: "find Acme" / "search John Smith" (cross-object)
         const generalMatch = text.match(generalPattern);
         if (generalMatch) {
             const searchTerm = generalMatch[1].trim();
@@ -787,6 +805,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         return false;
     }
 
+    /** Calls the Apex search method and populates the results panel. */
     async executeSearch(objectApiName, searchTerm) {
         this.isSearching = true;
         this.actionMessage = objectApiName
@@ -835,14 +854,7 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         }
     }
 
-    // ─── VOICE FEEDBACK ─────────────────────────────────────────────────
-
-    speakFeedback(text) {
-        const iframe = this.refs.voiceFrame;
-        if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage({ action: 'speak', text: text }, '*');
-        }
-    }
+    // Navigation
 
     navigateToNewField(objectApiName) {
         const url = `/lightning/setup/ObjectManager/${objectApiName}/FieldsAndRelationships/new`;
@@ -889,12 +901,13 @@ export default class VoiceNavigator extends NavigationMixin(LightningElement) {
         window.open(url, '_blank');
     }
 
-    disconnectedCallback() {
-        if (this._messageHandler) {
-            window.removeEventListener('message', this._messageHandler);
-        }
-        if (this._keyHandler) {
-            window.removeEventListener('keydown', this._keyHandler);
+    // Voice feedback
+
+    /** Sends text to the speech synthesis engine inside the iframe. */
+    speakFeedback(text) {
+        const iframe = this.refs.voiceFrame;
+        if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage({ action: 'speak', text: text }, '*');
         }
     }
 }

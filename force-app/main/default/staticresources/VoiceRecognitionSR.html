@@ -10,11 +10,13 @@
 </head>
 <body>
 <script>
-    var recognition = null;
-    var speechSupported = false;
+    'use strict';
+
+    let recognition = null;
+    let speechSupported = false;
 
     try {
-        var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {
             recognition = new SpeechRecognition();
             recognition.continuous = false;
@@ -27,20 +29,19 @@
         speechSupported = false;
     }
 
-    // Notify parent about speech support status
     window.parent.postMessage({
         type: 'voiceSpeechSupport',
         supported: speechSupported
     }, '*');
 
     if (recognition) {
-        recognition.onstart = function() {
+        recognition.onstart = function () {
             window.parent.postMessage({ type: 'voiceStatus', status: 'listening' }, '*');
         };
 
-        recognition.onresult = function(event) {
-            var transcript = event.results[0][0].transcript;
-            var confidence = event.results[0][0].confidence;
+        recognition.onresult = function (event) {
+            const transcript = event.results[0][0].transcript;
+            const confidence = event.results[0][0].confidence;
             window.parent.postMessage({
                 type: 'voiceResult',
                 transcript: transcript,
@@ -48,22 +49,28 @@
             }, '*');
         };
 
-        recognition.onerror = function(event) {
+        recognition.onerror = function (event) {
             window.parent.postMessage({
                 type: 'voiceError',
                 error: event.error
             }, '*');
         };
 
-        recognition.onend = function() {
+        recognition.onend = function () {
             window.parent.postMessage({ type: 'voiceStatus', status: 'ended' }, '*');
         };
     }
 
-    // Listen for commands from LWC
-    window.addEventListener('message', function(event) {
-        if (event.data && event.data.action === 'start' && recognition) {
-            // Cancel any ongoing speech feedback before listening
+    window.addEventListener('message', function (event) {
+        if (event.origin !== window.location.origin) {
+            return;
+        }
+
+        if (!event.data || !event.data.action) {
+            return;
+        }
+
+        if (event.data.action === 'start' && recognition) {
             if (window.speechSynthesis) {
                 window.speechSynthesis.cancel();
             }
@@ -71,32 +78,31 @@
                 recognition.start();
             } catch (e) {
                 recognition.stop();
-                setTimeout(function() {
+                setTimeout(function () {
                     recognition.start();
                 }, 200);
             }
         }
-        if (event.data && event.data.action === 'stop' && recognition) {
+
+        if (event.data.action === 'stop' && recognition) {
             try {
                 recognition.stop();
             } catch (e) {
-                // ignore
+                // Recognition was not running; safe to ignore
             }
         }
-        // Speech synthesis handler
-        if (event.data && event.data.action === 'speak') {
+
+        if (event.data.action === 'speak' && window.speechSynthesis) {
             try {
-                if (window.speechSynthesis) {
-                    window.speechSynthesis.cancel();
-                    var utterance = new SpeechSynthesisUtterance(event.data.text);
-                    utterance.lang = 'en-US';
-                    utterance.rate = 1.0;
-                    utterance.pitch = 1.0;
-                    utterance.volume = 0.8;
-                    window.speechSynthesis.speak(utterance);
-                }
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(event.data.text);
+                utterance.lang = 'en-US';
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
+                utterance.volume = 0.8;
+                window.speechSynthesis.speak(utterance);
             } catch (e) {
-                // Speech synthesis not available, fail silently
+                // Synthesis unavailable in this browser
             }
         }
     });

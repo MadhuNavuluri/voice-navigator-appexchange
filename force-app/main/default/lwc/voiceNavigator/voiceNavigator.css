@@ -1,3 +1,4 @@
+/* Speech engine iframe — hidden from view */
 .voice-iframe {
     width: 0;
     height: 0;
@@ -6,7 +7,7 @@
     overflow: hidden;
 }
 
-/* ── Mic Button ─────────────────────────────────────────── */
+/* Mic button */
 .mic-button {
     width: 80px;
     height: 80px;
@@ -52,7 +53,7 @@
     fill: #ffffff;
 }
 
-/* ── Sound Wave Bars (visible when listening) ───────────── */
+/* Sound wave bars */
 .sound-wave-container {
     display: flex;
     align-items: center;
@@ -82,18 +83,12 @@
 }
 
 @keyframes pulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(194, 57, 52, 0.5);
-    }
-    70% {
-        box-shadow: 0 0 0 18px rgba(194, 57, 52, 0);
-    }
-    100% {
-        box-shadow: 0 0 0 0 rgba(194, 57, 52, 0);
-    }
+    0%   { box-shadow: 0 0 0 0 rgba(194, 57, 52, 0.5); }
+    70%  { box-shadow: 0 0 0 18px rgba(194, 57, 52, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(194, 57, 52, 0); }
 }
 
-/* ── Hint & Welcome Text ────────────────────────────────── */
+/* Hint text */
 .shortcut-hint {
     font-size: 11px;
     color: #706e6b;
@@ -109,7 +104,7 @@
     margin-top: 2px;
 }
 
-/* ── Status Badge with Icons ────────────────────────────── */
+/* Status badge */
 .status-badge {
     display: inline-flex;
     align-items: center;
@@ -121,15 +116,18 @@
     transition: all 0.3s ease;
 }
 
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
 .status-ready {
     background-color: #e8f5e9;
     color: #2e844a;
 }
 
 .status-ready .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
     background-color: #2e844a;
 }
 
@@ -139,9 +137,6 @@
 }
 
 .status-listening .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
     background-color: #c23934;
     animation: statusPulse 1s infinite;
 }
@@ -167,13 +162,10 @@
 }
 
 .status-error .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
     background-color: #e86e00;
 }
 
-/* ── Confidence Indicator ───────────────────────────────── */
+/* Confidence indicator */
 .confidence-container {
     display: flex;
     align-items: center;
@@ -195,9 +187,9 @@
     transition: width 0.5s ease;
 }
 
-.confidence-high { background-color: #2e844a; }
+.confidence-high   { background-color: #2e844a; }
 .confidence-medium { background-color: #e8a300; }
-.confidence-low { background-color: #c23934; }
+.confidence-low    { background-color: #c23934; }
 
 .confidence-label {
     font-size: 11px;
@@ -206,21 +198,21 @@
     text-align: right;
 }
 
-.confidence-label-high { color: #2e844a; }
+.confidence-label-high   { color: #2e844a; }
 .confidence-label-medium { color: #e8a300; }
-.confidence-label-low { color: #c23934; }
+.confidence-label-low    { color: #c23934; }
 
-/* ── Fade-in Transitions ────────────────────────────────── */
+/* Fade-in transition */
 .fade-in {
     animation: fadeIn 0.35s ease-in;
 }
 
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(-6px); }
-    to { opacity: 1; transform: translateY(0); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Existing Styles (updated) ──────────────────────────── */
+/* Theme overrides */
 .slds-badge_success {
     background-color: #2e844a;
     color: white;
@@ -240,6 +232,7 @@
     padding: 8px 12px;
 }
 
+/* Search results */
 .search-results-container {
     max-height: 300px;
     overflow-y: auto;
